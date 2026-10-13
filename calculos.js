@@ -60,6 +60,41 @@ class Janela {   // eventos dos últimos N segundos com somas mantidas increment
   contar(lado) { this.soma(); return lado == null ? Object.values(this.n).reduce((a, b) => a + b, 0) : (this.n[lado] || 0); }
 }
 
+// Absorção: muita agressão de um lado num minuto, mas o preço não anda.
+// Ex.: vendas fortes e o preço não cai = alguém grande comprando com ordens escondidas (acumulação).
+class Absorcao {
+  constructor(seg) { this.seg = seg; this.atual = null; this.hist = []; this.eventos = []; }
+  add(ts, preco, valor, lado) {
+    const m = Math.floor(ts / 60);
+    if (!this.atual || this.atual.m !== m) { if (this.atual && m > this.atual.m) this._fechar(this.atual); if (!this.atual || m > this.atual.m) this.atual = {m, o: preco, c: preco, compra: 0, venda: 0}; }
+    if (m < this.atual.m) return;              // negócio atrasado: ignora
+    this.atual.c = preco; this.atual[lado] += valor;
+  }
+  _fechar(b) {
+    const vol = b.compra + b.venda;
+    const ant = this.hist.slice(-60).map(x => x.vol).sort((a, c) => a - c);
+    this.hist.push({m: b.m, vol}); if (this.hist.length > 180) this.hist.shift();
+    if (ant.length < 20 || !b.o) return;
+    const med = ant[Math.floor(ant.length / 2)];
+    if (!(vol >= 2.5 * med && vol > 0)) return;
+    const liq = (b.compra - b.venda) / vol, mov = (b.c - b.o) / b.o;
+    let tipo = null;
+    if (liq <= -0.4 && mov >= -0.0005) tipo = "vendas_absorvidas";       // vendedores batendo e o preço segurando = comprador escondido
+    else if (liq >= 0.4 && mov <= 0.0005) tipo = "compras_absorvidas";   // compradores batendo e o preço travado = vendedor escondido
+    if (tipo) this.eventos.push({ts: b.m * 60 + 60, tipo, valor: tipo === "vendas_absorvidas" ? b.venda : b.compra, preco: b.c, vezes_normal: vol / med});
+  }
+  resumo(agora) {
+    const lim = (agora ?? Date.now() / 1000) - this.seg;
+    this.eventos = this.eventos.filter(e => e.ts >= lim);
+    const va = this.eventos.filter(e => e.tipo === "vendas_absorvidas"), ca = this.eventos.filter(e => e.tipo === "compras_absorvidas");
+    let leitura = null, tom = "neutro";
+    if (va.length > ca.length) { leitura = `vendas fortes sendo absorvidas sem derrubar o preço (${va.length}x na última hora): comprador grande escondido`; tom = "alta"; }
+    else if (ca.length > va.length) { leitura = `compras fortes sendo absorvidas sem subir o preço (${ca.length}x na última hora): vendedor grande escondido`; tom = "baixa"; }
+    return {pronto: this.hist.length >= 20, n_vendas_absorvidas: va.length, n_compras_absorvidas: ca.length, saldo: va.length - ca.length, leitura, tom,
+      eventos: this.eventos.slice(-8).reverse()};
+  }
+}
+
 class EstadoMoeda {
   constructor({simbolo, quantidade = 0, preco_medio = 0, trade_grande_usd = 100000, janela_seg = 3600}) {
     Object.assign(this, {simbolo, quantidade, preco_medio, trade_grande_usd, janela_seg});
@@ -70,12 +105,22 @@ class EstadoMoeda {
     this.hl_proporcao_long = null;
     this.fluxo = new Janela(janela_seg); this.baleias = new Janela(janela_seg); this.liquidacoes = new Janela(janela_seg);
     this.ultimas_baleias = []; this.ciclo = null;
+    this.precos = [];                         // amostras de preço (a cada 20 s) para saber a variação na janela
+    this.absorcao = new Absorcao(janela_seg);
+    this.paredes = new Map();                 // paredes do livro acompanhadas entre leituras (anti-paredes falsas)
+    this.paredes_sumidas = [];                // paredes grandes que sumiram rápido (suspeitas)
+    this.leituras_livro = 0;
   }
   registrarTrade(preco, qtd, vendedorAgressor, origem, ts) {
     ts = ts || Date.now() / 1000;
     const ev = {ts, valor: preco * qtd, lado: vendedorAgressor ? "venda" : "compra", origem, preco};
     this.fluxo.add(ev);
-    if (origem === "spot") this.preco = preco;
+    if (origem === "spot") {
+      this.preco = preco;
+      const u = this.precos[this.precos.length - 1];
+      if (!u || ts - u.ts >= 20) { this.precos.push({ts, p: preco}); while (this.precos.length && this.precos[0].ts < ts - this.janela_seg - 60) this.precos.shift(); }
+    }
+    this.absorcao.add(ts, preco, ev.valor, ev.lado);
     if (ev.valor >= this.trade_grande_usd) {
       this.baleias.add(ev); this.ultimas_baleias.unshift(ev);
       if (this.ultimas_baleias.length > 25) this.ultimas_baleias.pop();
@@ -87,17 +132,73 @@ class EstadoMoeda {
     const ev = {ts: ts || Date.now() / 1000, valor: preco * qtd, lado: ladoOrdem.toUpperCase() === "SELL" ? "long" : "short", origem: "futuros"};
     this.liquidacoes.add(ev); return ev;
   }
-  atualizarLivro(bids, asks, faixaPct) {
+  atualizarLivro(bids, asks, faixaPct, ts) {
     if (!bids?.length || !asks?.length) return;
+    ts = ts || Date.now() / 1000;
     let b = bids.map(([p, q]) => [+p, +q]), a = asks.map(([p, q]) => [+p, +q]);
     const meio = (b[0][0] + a[0][0]) / 2;
     b = b.filter(([p]) => p >= meio * (1 - faixaPct / 100));
     a = a.filter(([p]) => p <= meio * (1 + faixaPct / 100));
-    const vb = b.reduce((s, [p, q]) => s + p * q, 0), va = a.reduce((s, [p, q]) => s + p * q, 0);
+    this.leituras_livro++;
+    // 1) candidatas a parede: níveis com valor >= 4x a mediana dos níveis
+    const valores = [...b, ...a].map(([p, q]) => p * q).sort((x, y) => x - y);
+    const med = valores[Math.floor(valores.length / 2)] || 0, corte = med * 4;
+    const passo = meio * 0.001, vistas = new Set();
+    const marcar = (lista, lado) => { for (const [p, q] of lista) { const v = p * q; if (v < corte) continue;
+      const k = lado + ":" + Math.round(p / passo), w = this.paredes.get(k);
+      if (w) { w.vistas = w.ultima_leitura === this.leituras_livro - 1 ? w.vistas + 1 : 1; w.valor = v; w.preco = p; }
+      else this.paredes.set(k, {lado, preco: p, valor: v, vistas: 1, desde: ts});
+      const ww = this.paredes.get(k); ww.ultima_leitura = this.leituras_livro; ww.ts = ts; vistas.add(k); } };
+    marcar(b, "compra"); marcar(a, "venda");
+    // 2) paredes que sumiram: se ficaram pouco tempo e o preço nem chegou nelas, eram suspeitas
+    for (const [k, w] of this.paredes) {
+      if (vistas.has(k)) continue;
+      const tocou = w.lado === "compra" ? meio <= w.preco * 1.001 : meio >= w.preco * 0.999;
+      if (w.vistas <= 2 && !tocou) this.paredes_sumidas.push({ts, lado: w.lado, preco: w.preco, valor: w.valor});
+      this.paredes.delete(k);
+    }
+    this.paredes_sumidas = this.paredes_sumidas.filter(x => x.ts >= ts - this.janela_seg);
+    // 3) desequilíbrio do livro sem contar paredes ainda não confirmadas (podem ser falsas)
+    const novas = new Set([...this.paredes.values()].filter(w => w.vistas < 3).map(w => w.lado + ":" + Math.round(w.preco / passo)));
+    const soma = (l, lado) => l.reduce((t, [p, q]) => t + (novas.has(lado + ":" + Math.round(p / passo)) ? 0 : p * q), 0);
+    const vb = soma(b, "compra"), va = soma(a, "venda");
     if (vb + va > 0) this.livro_desequilibrio = (vb - va) / (vb + va);
-    const maior = l => l.reduce((m, x) => (x[0] * x[1] > m[0] * m[1] ? x : m));
-    if (b.length) { const [p, q] = maior(b); this.parede_compra = [p, p * q]; }
-    if (a.length) { const [p, q] = maior(a); this.parede_venda = [p, p * q]; }
+    // 4) paredes "reais" = vistas em 3 leituras seguidas ou mais
+    const reais = lado => [...this.paredes.values()].filter(w => w.lado === lado && w.vistas >= 3).sort((x, y) => y.valor - x.valor);
+    const rc = reais("compra"), rv = reais("venda");
+    this.parede_compra = rc.length ? [rc[0].preco, rc[0].valor] : null;
+    this.parede_venda = rv.length ? [rv[0].preco, rv[0].valor] : null;
+  }
+  paredesResumo() {
+    const reais = [...this.paredes.values()].filter(w => w.vistas >= 3).map(w => ({lado: w.lado, preco: w.preco, valor: w.valor, minutos: Math.round((w.ts - w.desde) / 60)}));
+    const sc = this.paredes_sumidas.filter(x => x.lado === "compra").length, sv = this.paredes_sumidas.filter(x => x.lado === "venda").length;
+    let leitura = null;
+    if (sc + sv >= 3) leitura = sv > sc ? `${sv} paredes de venda sumiram rápido (possível blefe para segurar o preço)` : sc > sv ? `${sc} paredes de compra sumiram rápido (possível blefe para atrair compradores)` : `${sc + sv} paredes grandes sumiram rápido (livro com blefes)`;
+    return {reais: reais.sort((x, y) => y.valor - x.valor).slice(0, 6), sumidas_compra: sc, sumidas_venda: sv, leitura, aquecendo: this.leituras_livro < 3};
+  }
+  // Quem está puxando o preço: compras/vendas à vista (spot) ou especulação (futuros)?
+  condutor() {
+    const g = (l, o) => this.fluxo.soma(l, o);
+    const cs = g("compra", "spot"), vs = g("venda", "spot"), cf = g("compra", "futuros"), vf = g("venda", "futuros");
+    const volS = cs + vs, volF = cf + vf;
+    if (this.fluxo.contar() < 150 || !this.precos.length || !this.preco) return {leitura: null, tom: "neutro", pontos: 0, aquecendo: true};
+    const rs = volS ? (cs - vs) / volS : 0, rf = volF ? (cf - vf) / volF : 0;
+    const vr = (this.preco / this.precos[0].p - 1) * 100;
+    let leitura = "sem um lado dominante", tom = "neutro", pontos = 0, tipo = "neutro";
+    if (vr >= 0.3) {
+      if (rs >= 0.05 && rs >= rf - 0.05) [leitura, tom, pontos, tipo] = ["alta puxada por compras à vista (mais sustentável)", "alta", 10, "alta_saudavel"];
+      else if (rf > 0.05 && rs < 0.02) [leitura, tom, pontos, tipo] = ["alta puxada pela especulação nos futuros (frágil)", "alerta", -5, "alta_fragil"];
+      else leitura = "alta sem um lado dominante";
+    } else if (vr <= -0.3) {
+      if (rs <= -0.05 && rs <= rf + 0.05) [leitura, tom, pontos, tipo] = ["queda puxada por vendas à vista (venda real)", "baixa", -10, "queda_real"];
+      else if (rf < -0.05 && rs > -0.02) [leitura, tom, pontos, tipo] = ["queda puxada pelos futuros (limpeza de alavancagem, costuma passar)", "neutro", 3, "queda_futuros"];
+      else leitura = "queda sem um lado dominante";
+    } else {
+      if (rs > 0.1 && rf < 0) [leitura, tom, pontos, tipo] = ["preço parado com compras à vista e especuladores vendendo (acumulação)", "alta", 8, "acumulacao"];
+      else if (rs < -0.1 && rf > 0) [leitura, tom, pontos, tipo] = ["preço parado com vendas à vista e especuladores comprando (distribuição)", "baixa", -8, "distribuicao"];
+      else leitura = "preço de lado, sem pressão clara";
+    }
+    return {leitura, tom, pontos, tipo, var_pct: vr, saldo_spot: rs, saldo_futuros: rf, vol_spot: volS, vol_futuros: volF};
   }
   get cvd() { return this.fluxo.soma("compra") - this.fluxo.soma("venda"); }
   get baleiasLiquido() { return this.baleias.soma("compra") - this.baleias.soma("venda"); }
@@ -128,6 +229,10 @@ class EstadoMoeda {
       if (r >= 0.65) { pts += 10; motivos.push(`baleias da Hyperliquid ${br(r * 100, 0)}% compradas`); }
       else if (r <= 0.35) { pts -= 10; motivos.push(`baleias da Hyperliquid ${br((1 - r) * 100, 0)}% vendidas`); } }
     if (this.vwap_24h && this.preco) pts += this.preco > this.vwap_24h ? 5 : -5;
+    const cd = this.condutor();
+    if (cd.leitura && cd.pontos) { pts += cd.pontos; motivos.push(cd.leitura); }
+    const ab = this.absorcao.resumo();
+    if (ab.saldo) { pts += Math.max(-10, Math.min(10, 4 * ab.saldo)); motivos.push(ab.leitura); }
     if (this.rsi_1h != null) {
       if (this.rsi_1h > 75) { pts -= 5; motivos.push(`RSI 1h sobrecomprado (${Math.round(this.rsi_1h)})`); }
       else if (this.rsi_1h < 25) { pts += 5; motivos.push(`RSI 1h sobrevendido (${Math.round(this.rsi_1h)})`); } }
@@ -331,12 +436,12 @@ const HORIZONTES = [7, 30, 90], INTERVALO = 10, MIN_CASOS = 6, SORTEIOS = 3000;
 function preparar(d1) {
   const n = d1.length, fech = d1.map(v => v.c);
   const s1 = soprSerie(d1, 3), s7 = mediaPonderadaMovel(s1, d1.map(v => v.quote), 7), custo = custoCurtoPrazo(d1, 155);
-  const p5 = Array(n).fill(null), p95 = Array(n).fill(null);
+  const p5 = Array(n).fill(null), p95 = Array(n).fill(null), p85 = Array(n).fill(null);
   for (let i = 0; i < n; i++) {
     const j = s7.slice(Math.max(0, i - 365), i).filter(x => x != null);
     if (j.length >= 180) { j.sort((a, b) => a - b);
       const q = p => { const k = (j.length - 1) * p / 100, a = Math.floor(k), b = Math.ceil(k); return j[a] + (j[b] - j[a]) * (k - a); };
-      p5[i] = q(5); p95[i] = q(95); }
+      p5[i] = q(5); p95[i] = q(95); p85[i] = q(85); }
   }
   const r = Array(n).fill(null);
   if (n > 15) {
@@ -350,7 +455,7 @@ function preparar(d1) {
   const regime = Array(n).fill(null);
   for (let i = 90; i < n; i++) if (s7[i] != null && custo[i] != null)
     regime[i] = regimeProvavel(d1.slice(Math.max(0, i - 120), i + 1), s7[i], {p5: p5[i], p95: p95[i]}, 0, null, custo[i]);
-  return {d1, fech, s7, custo, p5, p95, rsi: r, sma50, regime};
+  return {d1, fech, s7, custo, p5, p95, p85, rsi: r, sma50, regime};
 }
 const um = n => Array(n).fill(1);
 const cruzouAcima = (a, b, i) => i > 0 && a[i] != null && a[i - 1] != null && b[i] != null && b[i - 1] != null && a[i - 1] < b[i - 1] && a[i] >= b[i];
@@ -445,13 +550,77 @@ function filtroBtc(xa, xb) {
   const m = new Map(); xb.d1.forEach((v, i) => { const r = xb.regime[i]; if (r) m.set(Math.floor(v.t / 86400), r.alta >= r.baixa); });
   return xa.d1.map(v => m.get(Math.floor(v.t / 86400)) ?? false);
 }
+// ------------------------------------------------------------ PESOS AJUSTADOS PELO HISTÓRICO
+// Para cada fator do sinal direto que tem histórico, mede a correlação (por posição/rank)
+// entre o valor do fator num dia e o retorno do preço 30 dias depois.
+// Treino = primeiros 70% dos dias; teste = 30% finais (o ajuste nunca viu esse período).
+// O peso só muda se o efeito aparece no treino E se confirma no teste.
+function ranks(a) {
+  const idx = a.map((v, i) => [v, i]).sort((x, y) => x[0] - y[0]), r = Array(a.length);
+  for (let i = 0; i < idx.length;) { let j = i; while (j + 1 < idx.length && idx[j + 1][0] === idx[i][0]) j++;
+    const m = (i + j) / 2 + 1; for (let k = i; k <= j; k++) r[idx[k][1]] = m; i = j + 1; }
+  return r;
+}
+function spearman(x, y) {
+  if (x.length < 30) return null;
+  const rx = ranks(x), ry = ranks(y), mx = media(rx), my = media(ry);
+  let num = 0, dx = 0, dy = 0;
+  for (let i = 0; i < rx.length; i++) { const a = rx[i] - mx, b = ry[i] - my; num += a * b; dx += a * a; dy += b * b; }
+  return dx && dy ? num / Math.sqrt(dx * dy) : null;
+}
+const NOMES_FATORES = {sopr_c: "SOPR (sinal de compra)", sopr_v: "SOPR (sinal de venda)", regime_c: "Tendência (compra)", regime_v: "Tendência (venda)",
+  btc_c: "Filtro do BTC (compra)", btc_v: "BTC em baixa (venda)", forca_c: "Força contra o BTC"};
+function calibrarPesos(x, xb) {
+  const n = x.fech.length, H = 30, ser = {};
+  for (const k of Object.keys(NOMES_FATORES)) ser[k] = Array(n).fill(null);
+  let filtro = null, forcaTom = null;
+  if (xb) {
+    filtro = filtroBtc(x, xb);
+    const pb = new Map(xb.d1.map(v => [v.t, v.c])), raz = x.d1.map(v => (pb.get(v.t) ? v.c / pb.get(v.t) : null));
+    forcaTom = raz.map((r, i) => { if (r == null || i < 50) return null; const ja = raz.slice(i - 49, i + 1); if (ja.some(z => z == null)) return null;
+      const m50 = media(ja), r30 = raz[i - 30]; if (r30 == null) return null; const v30 = r / r30 - 1;
+      return r > m50 && v30 > 0 ? 1 : r <= m50 && v30 < 0 ? 0 : 0.5; });
+  }
+  for (let i = 0; i < n; i++) {
+    if (x.s7[i] != null && x.p5[i] != null && x.custo[i] != null) {
+      const [, tom] = classificar(x.s7[i], {p5: x.p5[i], p85: x.p85[i], p95: x.p95[i]}), pvc = x.fech[i] / x.custo[i] - 1;
+      let v = ({prejuizo_extremo: 1, prejuizo: 0.5, neutro: 0.35, lucro: 0.2, lucro_forte: 0.05, lucro_extremo: 0})[tom] ?? 0.3;
+      if (pvc < 0 && (tom === "prejuizo" || tom === "prejuizo_extremo")) v = Math.min(1, v + 0.2);
+      ser.sopr_c[i] = v; ser.sopr_v[i] = ({lucro_extremo: 1, lucro_forte: 0.75, lucro: 0.35})[tom] ?? 0;
+    }
+    const r = x.regime[i];
+    if (r) { ser.regime_c[i] = lim01((r.alta - r.baixa + 30) / 60); ser.regime_v[i] = lim01((r.baixa - r.alta + 30) / 60); }
+    if (filtro && x.regime[i]) { ser.btc_c[i] = filtro[i] ? 1 : 0; ser.btc_v[i] = filtro[i] ? 0 : 1; }
+    if (forcaTom && forcaTom[i] != null) ser.forca_c[i] = forcaTom[i];
+  }
+  const fut = x.fech.map((c, i) => (i + H < n ? (x.fech[i + H] / c - 1) * 100 : null));
+  const out = {};
+  for (const [k, serie] of Object.entries(ser)) {
+    const dias = []; for (let i = 0; i < n; i++) if (serie[i] != null && fut[i] != null) dias.push(i);
+    if (dias.length < 150) continue;
+    const corte = Math.floor(dias.length * 0.7), tr = dias.slice(0, corte), te = dias.slice(corte);
+    const sinal = k.endsWith("_v") ? -1 : 1;
+    const icTr = spearman(tr.map(i => serie[i]), tr.map(i => fut[i])), icTe = spearman(te.map(i => serie[i]), te.map(i => fut[i]));
+    if (icTr == null || icTe == null) continue;
+    const a = sinal * icTr, b = sinal * icTe;
+    let mult = 1, leitura = "mantido: sem evidência clara no histórico";
+    if (a > 0.03 && b > 0) { mult = Math.min(2, 1 + 5 * a); leitura = "reforçado: funcionou no treino e se confirmou no teste"; }
+    else if (a < -0.03 && b < 0) { mult = Math.max(0.25, 1 + 5 * a); leitura = "reduzido: funcionou ao contrário no treino e no teste"; }
+    else if (a > 0.03 && b <= 0) leitura = "mantido: funcionou no treino mas não se confirmou no teste";
+    out[k] = {nome: NOMES_FATORES[k], mult, ic_treino: a, ic_teste: b, dias_treino: tr.length, dias_teste: te.length, leitura};
+  }
+  return out;
+}
+
 function rodarLab(d1, d1Btc, xBtc) {
   const x = preparar(d1), ini = inicioValido(x);
   const sinais = SINAIS.map(s => avaliarSinal(x, s, ini, null));
-  if (d1Btc) { const xb = xBtc || preparar(d1Btc), f = filtroBtc(x, xb);
+  let xb = null;
+  if (d1Btc) { xb = xBtc || preparar(d1Btc); const f = filtroBtc(x, xb);
     for (const s of SINAIS) if (s.tipo === "compra") sinais.push(avaliarSinal(x, s, ini, f)); }
+  const pesos = calibrarPesos(x, xb);
   return {dias_testados: x.fech.length - ini, inicio: ini < d1.length ? d1[ini].t : null, fim: d1.length ? d1[d1.length - 1].t : null,
-    sinais, precos: d1.slice(ini).map(v => ({t: v.t, preco: v.c})), _x: x};
+    sinais, pesos, precos: d1.slice(ini).map(v => ({t: v.t, preco: v.c})), _x: x};
 }
 
 // ------------------------------------------------------------ SINAL DIRETO
@@ -476,23 +645,39 @@ function avaliar(m, medo, ehBtc) {
   const p = m.preco || 0, s = m.sopr || {}, r = m.regime || {}, hl = m.hl?.baleias?.proporcao_long ?? null;
   const fl = m.filtro_btc ?? null, fb = m.forca_btc, placar = m.placar || 0, ativos = m.lab?.ativos || [];
   let [sup, res, atr] = niveis(m); atr = atr || p * 0.03;
-  const compra = [], venda = [];
+  const compra = [], venda = [], PS = m.pesos || {};
+  // cada fator pode ter peso ajustado pelo histórico da moeda (Laboratório → pesos)
+  const C_ = (w, v, t, k) => compra.push([w * (k && PS[k] ? PS[k].mult : 1), v, t, k]);
+  const V_ = (w, v, t, k) => venda.push([w * (k && PS[k] ? PS[k].mult : 1), v, t, k]);
   const tom = s.tom, pvc = s.preco_vs_custo_pct;
   if (tom) {
     let v = ({prejuizo_extremo: 1, prejuizo: 0.5, neutro: 0.35, lucro: 0.2, lucro_forte: 0.05, lucro_extremo: 0})[tom] ?? 0.3;
     if (pvc != null && pvc < 0 && (tom === "prejuizo" || tom === "prejuizo_extremo")) v = Math.min(1, v + 0.2);
-    compra.push([20, v, v >= 0.6 ? "SOPR em capitulação/prejuízo: vendedores desistindo" : null]);
+    C_(20, v, v >= 0.6 ? "SOPR em capitulação/prejuízo: vendedores desistindo" : null, "sopr_c");
     const vv = ({lucro_extremo: 1, lucro_forte: 0.75, lucro: 0.35})[tom] ?? 0;
-    venda.push([25, vv, vv >= 0.75 ? "SOPR em realização forte/euforia" : null]);
+    V_(25, vv, vv >= 0.75 ? "SOPR em realização forte/euforia" : null, "sopr_v");
   }
   const prox = d => (d <= 0.5 ? 1 : d <= 1 ? 0.6 : d <= 2 ? 0.25 : 0);
-  if (p && sup.length) { const v = prox((p - sup[0]) / atr); compra.push([15, v, v >= 0.6 ? `preço encostado no suporte ${fmtPreco(sup[0])}` : null]); }
-  if (p && res.length) { const v = prox((res[0] - p) / atr); venda.push([15, v, v >= 0.6 ? `preço encostado na resistência ${fmtPreco(res[0])}` : null]); }
+  if (p && sup.length) { const v = prox((p - sup[0]) / atr); C_(15, v, v >= 0.6 ? `preço encostado no suporte ${fmtPreco(sup[0])}` : null, "suporte_c"); }
+  if (p && res.length) { const v = prox((res[0] - p) / atr); V_(15, v, v >= 0.6 ? `preço encostado na resistência ${fmtPreco(res[0])}` : null, "resistencia_v"); }
   if (r.alta != null) { const a = r.alta, b = r.baixa;
-    compra.push([15, lim01((a - b + 30) / 60), a - b >= 20 ? "regime com viés de alta" : null]);
-    venda.push([15, lim01((b - a + 30) / 60), b - a >= 20 ? "regime com viés de baixa" : null]); }
-  if (!ehBtc && fl) { compra.push([10, fl.ok ? 1 : 0, fl.ok ? "BTC favorável" : null]); venda.push([5, fl.ok ? 0 : 1, fl.ok ? null : "BTC em baixa"]); }
-  if (!ehBtc && fb) { const v = ({alta: 1, neutro: 0.5, baixa: 0})[fb.tom] ?? 0.5; compra.push([5, v, v === 1 ? "ganhando força contra o BTC" : null]); }
+    C_(15, lim01((a - b + 30) / 60), a - b >= 20 ? "regime com viés de alta" : null, "regime_c");
+    V_(15, lim01((b - a + 30) / 60), b - a >= 20 ? "regime com viés de baixa" : null, "regime_v"); }
+  if (!ehBtc && fl) { C_(10, fl.ok ? 1 : 0, fl.ok ? "BTC favorável" : null, "btc_c"); V_(5, fl.ok ? 0 : 1, fl.ok ? null : "BTC em baixa", "btc_v"); }
+  if (!ehBtc && fb) { const v = ({alta: 1, neutro: 0.5, baixa: 0})[fb.tom] ?? 0.5; C_(5, v, v === 1 ? "ganhando força contra o BTC" : null, "forca_c"); }
+  // quem está puxando o preço (à vista x futuros)
+  const cd = m.condutor;
+  if (cd && cd.leitura && !cd.aquecendo) {
+    const vc = ({alta_saudavel: 1, acumulacao: 1, queda_futuros: 0.6, neutro: 0.4, alta_fragil: 0.2, queda_real: 0, distribuicao: 0})[cd.tipo] ?? 0.4;
+    const vv = ({alta_fragil: 0.8, distribuicao: 1, queda_real: 1, neutro: 0.3})[cd.tipo] ?? 0;
+    C_(10, vc, vc >= 1 ? cd.leitura : null, "condutor_c"); V_(10, vv, vv >= 0.8 ? cd.leitura : null, "condutor_v");
+  }
+  // absorção (comprador ou vendedor grande escondido)
+  const ab = m.absorcao;
+  if (ab && ab.pronto) {
+    C_(10, ab.saldo > 0 ? Math.min(1, 0.5 + 0.25 * ab.saldo) : ab.saldo < 0 ? 0 : 0.3, ab.saldo > 0 ? ab.leitura : null, "absorcao_c");
+    V_(10, ab.saldo < 0 ? Math.min(1, 0.5 - 0.25 * ab.saldo) : ab.saldo > 0 ? 0 : 0.3, ab.saldo < 0 ? ab.leitura : null, "absorcao_v");
+  }
   const sp = (placar >= 0 ? "+" : "") + placar;
   compra.push([10, lim01((placar + 15) / 45), placar >= 25 ? `fluxo comprador ao vivo (${sp})` : null]);
   venda.push([10, lim01((-placar + 15) / 45), placar <= -25 ? `fluxo vendedor ao vivo (${sp})` : null]);
@@ -554,7 +739,7 @@ class Estabilizador {
 
 const API = {pyRound, br, fmtUsd, fmtPreco, media, Janela, EstadoMoeda, leituraTexto, rsi, converter, agrupar, soprSerie,
   mediaPonderadaMovel, custoCurtoPrazo, percentil, classificar, analisarTimeframe, diasExtremos, perfilVolume, regimeProvavel,
-  forcaVsBtc, analisarMoeda, preparar, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
+  forcaVsBtc, analisarMoeda, preparar, calibrarPesos, spearman, Absorcao, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
 if (typeof module !== "undefined" && module.exports) module.exports = API;
 else raiz.Calc = API;
 })(typeof window !== "undefined" ? window : globalThis);

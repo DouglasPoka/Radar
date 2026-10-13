@@ -127,6 +127,7 @@ function abrirWS(nome, base, streams, origem) {
   ws.onmessage = ev => { try { tratarTrade(JSON.parse(ev.data), origem); } catch (e) {} };
   ws.onclose = () => {
     if (!AJ.fluxo_ao_vivo) { M.status[nome] = "desligado"; return; }
+    if (M.pausado) { M.status[nome] = "pausado"; return; }
     M.status[nome] = "reconectando";
     M.ws[nome + "_espera"] = Math.min(espera * 2, 60000);
     setTimeout(() => { if (document.visibilityState === "visible") abrirWS(nome, base, streams, origem); }, espera);
@@ -237,7 +238,7 @@ function salvarLab() {
 async function rodadaLab(forcar = false) {
   const cache = ls.get("radar_lab", null);
   const simbolos = [...M.moedas.keys()];
-  if (!forcar && cache && agoraS() - cache.ts < 6 * 3600 && simbolos.every(s => cache.lab[s])) {
+  if (!forcar && cache && agoraS() - cache.ts < 6 * 3600 && simbolos.every(s => cache.lab[s] && cache.lab[s].pesos)) {
     M.lab = cache.lab; M.lab_atualizado = cache.ts; M.status.lab = "ok";
   } else {
     M.status.lab = "calculando"; const erros = [], hist = {};
@@ -460,6 +461,8 @@ function estadoMoeda(e) {
     regime: regimeDe(e), lab: labDaMoeda(e.simbolo),
     hl: {mercado: M.externo.hl_mercado[n] || null, baleias: M.externo.baleias_hl[n] || null},
     forca_btc: fb, filtro_btc: e.simbolo !== "BTCUSDT" ? filtroBtcAoVivo() : null, sinal: M.sinais[e.simbolo] || null,
+    condutor: e.condutor(), absorcao: e.absorcao.resumo(), paredes: e.paredesResumo(),
+    pesos: M.lab[e.simbolo]?.pesos || null,
   };
 }
 function conclusao(moedas) {
@@ -536,7 +539,16 @@ async function iniciar() {
   lacos.hl = laco("hyperliquid", rodadaHyperliquid, 600, 4);
   lacos.global = laco("mercado global", rodadaMercadoGlobal, 3600, 2);
 }
+let timerPausa = null;
 document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    // saiu do app: em 20 s desliga a conexão ao vivo para não gastar bateria nem internet
+    clearTimeout(timerPausa);
+    timerPausa = setTimeout(() => { if (document.visibilityState === "hidden") { M.pausado = true; desligarFluxo(); } }, 20000);
+    return;
+  }
+  clearTimeout(timerPausa);
+  if (M.pausado) { M.pausado = false; M.ws.spot_espera = M.ws.futuros_espera = 2000; }
   if (document.visibilityState === "visible") {
     // voltou para o app: reconecta e atualiza o que estiver velho
     ligarFluxo();

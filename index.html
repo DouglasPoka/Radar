@@ -188,6 +188,14 @@ function traduzir(t) {   // motivos técnicos -> português do dia a dia
     [/^histórico: /, "Situações parecidas deram certo no passado"],
     [/^medo no mercado/, "O mercado está com medo, o que costuma ser bom para quem compra com calma"],
     [/^ganância no mercado/, "O mercado está eufórico: hora de cautela"],
+    [/^alta puxada por compras à vista/, "A alta está vindo de compras reais, o que costuma ser mais firme"],
+    [/^alta puxada pela especulação/, "A alta está vindo de apostas com dinheiro emprestado e pode não durar"],
+    [/^queda puxada por vendas à vista/, "A queda está vindo de vendas reais"],
+    [/^queda puxada pelos futuros/, "A queda veio de apostas desfeitas no mercado futuro e costuma passar"],
+    [/\(acumulação\)$/, "Preço parado, mas investidores comprando de verdade enquanto especuladores vendem (acumulação)"],
+    [/\(distribuição\)$/, "Preço parado, mas investidores vendendo de verdade enquanto especuladores compram (distribuição)"],
+    [/^vendas fortes sendo absorvidas/, "Vendas fortes não conseguem derrubar o preço: tem um comprador grande segurando"],
+    [/^compras fortes sendo absorvidas/, "Compras fortes não conseguem subir o preço: tem um vendedor grande segurando"],
     [/^compra e venda equilibradas/, "Não há sinais fortes nem para comprar nem para vender"],
     [/^leve viés de compra/, "Leve inclinação para compra, mas ainda sem confirmação"],
     [/^leve viés de venda/, "Leve inclinação para venda, mas ainda sem confirmação"],
@@ -245,12 +253,36 @@ function planoHTML(m) {
   if (bc + bv > 0) grandes.push(`Na última hora, as grandes ordens na Binance foram mais de <b>${bc > bv * 1.3 ? "compra" : bv > bc * 1.3 ? "venda" : "compra e venda equilibradas"}</b>${bc > bv * 1.3 || bv > bc * 1.3 ? ` (${usd(Math.max(bc, bv))})` : ""}.`);
   const hl = m.hl?.baleias;
   if (hl?.proporcao_long != null) grandes.push(`Na Hyperliquid, <b>${nf(hl.proporcao_long * 100, 0)}%</b> do dinheiro dos maiores investidores está apostando na alta.`);
+  const cd = m.condutor;
+  if (cd?.leitura && !cd.aquecendo && cd.tipo && cd.tipo !== "neutro") grandes.push(traduzir(cd.leitura) + ".");
+  const ab = m.absorcao;
+  if (ab?.pronto && ab.saldo) grandes.push(traduzir(ab.leitura) + ".");
+  else if (ab && !ab.pronto) grandes.push(`<span class="fr">(A detecção de compradores e vendedores escondidos começa depois de uns 20 minutos com o app aberto.)</span>`);
+  const pa = m.paredes;
+  if (pa && !pa.aquecendo) {
+    const rc = pa.reais.filter(w => w.lado === "compra")[0], rv = pa.reais.filter(w => w.lado === "venda")[0];
+    if (rc) grandes.push(`Há uma ordem grande e firme de <b>compra</b> esperando em ${dinheiro(rc.preco)} (${usd(rc.valor)}), que pode segurar quedas.`);
+    if (rv) grandes.push(`Há uma ordem grande e firme de <b>venda</b> esperando em ${dinheiro(rv.preco)} (${usd(rv.valor)}), que pode segurar altas.`);
+    if (pa.sumidas_compra + pa.sumidas_venda >= 3) grandes.push(`Atenção: ${pa.sumidas_compra + pa.sumidas_venda} ordens grandes apareceram e sumiram rápido na última hora (possíveis blefes). O radar ignora essas.`);
+  }
   if (grandes.length) h += `<h4>🐋 O que os grandes investidores estão fazendo</h4><p style="margin:0">${grandes.join(" ")}</p>`;
   // histórico
   const at = (m.lab?.ativos || []).filter(a => a.tom === "bom" || a.tom === "fraco");
   if (at.length) { const a = at[0];
     h += `<h4>📚 Já aconteceu antes?</h4><p style="margin:0">Uma situação parecida ("${esc(a.nome)}") apareceu <b>${a.casos} vezes</b> no passado. Em ${nf(a.acerto30 || 0, 0)}% delas o preço ${a.tipo === "compra" ? "subiu" : "caiu"} no mês seguinte.</p>`; }
   return `<div class="plano">${h}</div>`;
+}
+
+// ===================================================================== "dinheiro grande agora" (resumo para iniciantes)
+function dinheiroGrande(m) {
+  let p = 0, n = 0;
+  const bc = m.baleias_compra || 0, bv = m.baleias_venda || 0;
+  if (bc + bv > 0) { n++; p += bc > bv * 1.3 ? 1 : bv > bc * 1.3 ? -1 : 0; }
+  if (m.absorcao?.pronto) { n++; p += Math.sign(m.absorcao.saldo || 0); }
+  if (m.condutor?.leitura && !m.condutor.aquecendo) { n++; p += m.condutor.tom === "alta" ? 1 : m.condutor.tom === "baixa" ? -1 : 0; }
+  const hl = m.hl?.baleias?.proporcao_long; if (hl != null) { n++; p += hl >= 0.6 ? 1 : hl <= 0.4 ? -1 : 0; }
+  if (!n) return null;
+  return p >= 2 ? ["comprando", "pos"] : p <= -2 ? ["vendendo", "neg"] : p === 1 ? ["mais comprando", "pos"] : p === -1 ? ["mais vendendo", "neg"] : ["sem movimento claro", "fr"];
 }
 
 // ===================================================================== cartões
@@ -266,6 +298,8 @@ function cartao(m) {
   const ref = x.referencia ? (x.referencia.tipo === "zona de compra"
       ? `<div class="linha"><span>💵 Preço bom para comprar</span><b>até ${dinheiro(x.referencia.preco)}</b></div>`
       : `<div class="linha"><span>💰 Preço bom para vender</span><b>a partir de ${dinheiro(x.referencia.preco)}</b></div>`) : "";
+  const dg = dinheiroGrande(m);
+  const grande = dg ? `<div class="linha"><span>🐋 Dinheiro grande agora</span><b class="${dg[1]}">${dg[0]}</b></div>` : "";
   const minha = tem ? `<div class="linha"><span>💼 Sua posição</span><b class="${m.pnl >= 0 ? "pos" : "neg"}">${m.pnl >= 0 ? "ganhando" : "perdendo"} ${pct(Math.abs(m.pnl_pct)).replace("+", "")} (${usd(m.pnl)})</b></div>` : "";
   const mudando = x.mudando_para ? `<div class="fr" style="font-size:13px;margin-top:6px">⏳ Pode mudar em instantes (confirmando nova leitura)…</div>` : "";
   const aberto = abertos.has(m.simbolo);
@@ -274,7 +308,7 @@ function cartao(m) {
     ${mudando}
     <div class="termo"><div class="barra"><div class="marca" style="left:${pos}%"></div></div><div class="rot"><span>vender</span><span>esperar</span><span>comprar</span></div></div>
     <ul class="porque">${motivos.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
-    ${ref}${minha}
+    ${grande}${ref}${minha}
     <button class="btn" onclick="alternar('${m.simbolo}')">${aberto ? "Fechar plano ▴" : "Ver plano ▾"}</button>
     ${aberto ? planoHTML(m) : ""}</div>`;
 }

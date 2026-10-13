@@ -202,6 +202,7 @@ td.wrap{white-space:normal;min-width:220px}
     </div>
     <div class="grid">
       <div class="card"><h3>Últimas ordens de baleia</h3><div id="baleias-lista"></div></div>
+      <div class="card" id="fluxo-card" style="grid-column:1/-1"></div>
       <div class="card" id="hl-card" style="grid-column:1/-1"></div>
       <div class="card"><h3>Como ler</h3>
         <ul class="motivos">
@@ -252,6 +253,9 @@ td.wrap{white-space:normal;min-width:220px}
       <div style="overflow-x:auto"><table id="lab-compra" class="compacta"></table></div></div>
     <div class="card"><h3 id="lab-tit-venda"></h3><p class="expl">Bom sinal de venda/realização = preço subiu menos (ou caiu mais) que num dia qualquer.</p>
       <div style="overflow-x:auto"><table id="lab-venda" class="compacta"></table></div></div>
+    <div class="card"><h3 id="lab-tit-pesos">Pesos ajustados para esta moeda</h3>
+      <p class="expl">Cada fator do sinal direto foi testado no histórico: correlação entre o valor do fator e o que o preço fez 30 dias depois. Os primeiros 70% dos dias servem de <b>treino</b>, e os 30% finais de <b>teste</b> (período que o ajuste nunca viu). O peso só muda se o efeito aparece nos dois. Fatores sem histórico (fluxo ao vivo, baleias, absorção, paredes) ficam com peso normal.</p>
+      <div style="overflow-x:auto"><table id="lab-pesos" class="compacta"></table></div></div>
     <div class="card"><h3 id="lab-tit-graf">Casos do sinal no gráfico</h3><p class="expl" id="lab-desc"></p>
       <div id="g-lab" style="height:320px"></div>
       <div style="overflow-x:auto;margin-top:12px"><table id="lab-eventos" class="compacta"></table></div></div>
@@ -425,8 +429,25 @@ function renderConclusao(){
 }
 
 // ---------- SMART MONEY ----------
+function renderFluxo(){
+  const m = moeda(), el = document.getElementById("fluxo-card"); if(!el) return;
+  const cd = m.condutor || {}, ab = m.absorcao || {}, pa = m.paredes || {};
+  const evs = (ab.eventos||[]).map(e => `<tr><td>${new Date(e.ts*1000).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</td>
+    <td class="${e.tipo==="vendas_absorvidas"?"pos":"neg"}">${e.tipo==="vendas_absorvidas"?"Vendas absorvidas (comprador escondido)":"Compras absorvidas (vendedor escondido)"}</td>
+    <td>${fu(e.valor)}</td><td>${nf(e.vezes_normal,1)}x o normal</td><td>${fp(e.preco)}</td></tr>`).join("");
+  el.innerHTML = `<h3>Leitura do fluxo · ${m.nome}</h3>
+    <div class="kpis">
+      <div class="kpi"><div class="r">Quem está puxando o preço</div><div style="font-weight:700;margin-top:4px" class="${cd.tom==="alta"?"pos":cd.tom==="baixa"?"neg":cd.tom==="alerta"?"neg":""}">${cd.aquecendo?"aguardando dados…":esc(cd.leitura||"-")}</div>
+        <span class="fr" style="font-size:12px">${cd.aquecendo?"":`preço ${pc(cd.var_pct,2)} na janela · saldo à vista ${pc((cd.saldo_spot||0)*100,0)} · futuros ${pc((cd.saldo_futuros||0)*100,0)}`}</span></div>
+      <div class="kpi"><div class="r">Absorção (última hora)</div><div style="font-weight:700;margin-top:4px">${ab.pronto?`<span class="pos">${ab.n_vendas_absorvidas} compradores escondidos</span> · <span class="neg">${ab.n_compras_absorvidas} vendedores escondidos</span>`:"começa após ~20 min com o app aberto"}</div></div>
+      <div class="kpi"><div class="r">Paredes do livro</div><div style="font-weight:700;margin-top:4px">${pa.aquecendo?"aguardando 3 leituras…":`${(pa.reais||[]).length} firmes · ${(pa.sumidas_compra||0)+(pa.sumidas_venda||0)} sumiram rápido`}</div>
+        <span class="fr" style="font-size:12px">Só paredes que ficam em 3 leituras seguidas contam. As que somem rápido são tratadas como blefe.</span></div>
+    </div>
+    ${evs?`<div style="overflow-x:auto"><table class="compacta"><tr><th>Hora</th><th class="esq">Evento</th><th>Volume</th><th>Intensidade</th><th>Preço</th></tr>${evs}</table></div>`:""}
+    ${(pa.reais||[]).length?`<div class="fr" style="margin:10px 0 4px">Paredes firmes agora</div>`+pa.reais.map(w=>`<div class="degrau ${w.lado==="compra"?"sup":"res"}"><div><b>${fp(w.preco)}</b> <span class="tag">${w.lado==="compra"?"compra":"venda"} · ${fu(w.valor)} · há ${w.minutos} min</span></div><span class="fr">${pc((w.preco/m.preco-1)*100)}</span></div>`).join(""):""}`;
+}
 function renderSmart(){
-  setTimeout(renderHL, 0);
+  setTimeout(renderHL, 0); setTimeout(renderFluxo, 0);
   document.getElementById("smart-expl").textContent = `Janela dos últimos ${E.janela_minutos} minutos. Clique numa linha para ver as últimas baleias.`;
   const cab = ["Moeda","Preço","24h","Baleias compra","Baleias venda","CVD","Livro ±2%","Funding","OI 1h","L/S top","RSI 1h","Liq. longs / shorts","Placar"];
   document.getElementById("tab-smart").innerHTML = `<tr>${cab.map(c=>`<th>${c}</th>`).join("")}</tr>` + E.moedas.map(m => `
@@ -805,6 +826,12 @@ function renderLab(){
         <td style="text-align:center"><span class="pill ${x.tom}">${esc(x.veredito)}</span></td></tr>`; }).join("");
   document.getElementById("lab-compra").innerHTML = tabela("compra");
   document.getElementById("lab-venda").innerHTML = tabela("venda");
+  const P = L.pesos || {};
+  document.getElementById("lab-tit-pesos").textContent = `Pesos ajustados para ${m.nome}`;
+  document.getElementById("lab-pesos").innerHTML = Object.keys(P).length ? Object.values(P).map(p => `<tr><td style="white-space:normal;padding:10px 4px">
+      <div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(p.nome)}</b><b class="${p.mult>1?"pos":p.mult<1?"neg":""}">peso ×${nf(p.mult,2)}</b></div>
+      <div class="fr" style="font-size:12.5px;margin-top:2px">${esc(p.leitura)} · correlação no treino <span class="${cls(p.ic_treino)}">${nf(p.ic_treino,3)}</span>, no teste <span class="${cls(p.ic_teste)}">${nf(p.ic_teste,3)}</span></div></td></tr>`).join("")
+    : '<tr><td class="vazio">Histórico curto demais para ajustar.</td></tr>';
   if(!labSinal) labSinal = (L.sinais.find(x => x.tom==="bom") || L.sinais[0]).id;
   renderLabGrafico(); renderLabVivo();
 }

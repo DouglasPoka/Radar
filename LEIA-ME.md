@@ -36,6 +36,25 @@ Ela só precisa ficar hospedada em algum lugar para você abrir pelo link. Vamos
   compras — com o porquê, os preços de referência e um plano simples ("Ver plano").
 - **📊 Modo completo** (botão na barra de baixo): o painel com todos os indicadores, gráficos e o Laboratório.
 
+## Indicadores do "dinheiro grande"
+
+- **Quem puxa o preço**: compara compras e vendas à vista (spot) com as dos futuros. Alta puxada à
+  vista costuma ser mais firme; alta puxada só pelos futuros (especulação) costuma ser frágil.
+- **Absorção**: num minuto com volume muito acima do normal, se vendem forte e o preço não cai, há um
+  comprador grande escondido (e vice-versa). Começa a funcionar ~20 min depois de abrir o app.
+- **Filtro de paredes falsas**: ordens grandes no livro só contam se ficam por 3 leituras seguidas;
+  as que somem rápido são tratadas como blefe e ignoradas.
+- **Pesos por moeda**: o Laboratório testa no histórico de cada moeda quais fatores do sinal
+  realmente funcionaram (treino nos primeiros 70% dos dias, confirmação nos 30% finais) e reforça ou
+  reduz o peso de cada um. Veja em Modo completo → Laboratório.
+
+Tudo isso entra na decisão da tela inicial e aparece em "🐋 Dinheiro grande agora" e no "Ver plano".
+
+## Bateria
+
+O radar só calcula com o app aberto e na tela. Ao sair do app, os cálculos param na hora e a conexão
+ao vivo é desligada 20 segundos depois. Ao voltar, tudo reconecta e atualiza sozinho.
+
 ## Primeiro uso
 
 - Toque em **💼 Minhas moedas** para colocar quanto você tem e quanto pagou (opcional) e ligar os
