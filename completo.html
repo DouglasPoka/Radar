@@ -190,6 +190,7 @@ td.wrap{white-space:normal;min-width:220px}
         <div class="grid2"><div style="overflow-x:auto"><table id="mg-forca" class="compacta"></table></div>
         <div><div class="fr" id="forca-tit" style="font-size:12.5px"></div><div id="g-forca" style="height:220px"></div></div></div></div>
     </div>
+    <div class="card"><h3>Opções (Deribit) e dinheiro novo</h3><div id="mg-opcoes"></div></div>
     <div class="card"><h3>Situação das fontes</h3><div id="mg-fontes" class="fr"></div></div>
   </section>
 
@@ -203,6 +204,7 @@ td.wrap{white-space:normal;min-width:220px}
     <div class="grid">
       <div class="card"><h3>Últimas ordens de baleia</h3><div id="baleias-lista"></div></div>
       <div class="card" id="fluxo-card" style="grid-column:1/-1"></div>
+      <div class="card" id="mapa-card" style="grid-column:1/-1"></div>
       <div class="card" id="hl-card" style="grid-column:1/-1"></div>
       <div class="card"><h3>Como ler</h3>
         <ul class="motivos">
@@ -372,6 +374,7 @@ function renderStatus(){
     `<span><i class="dot ${d(s.futuros)}"></i>futuros e liquidações${txt(s.futuros)}</span>`+
     `<span><i class="dot ${d(s.indicadores)}"></i>livro, funding e OI${txt(s.indicadores)}</span>`+
     `<span><i class="dot ${d(s.sopr)}"></i>${sopr}${s.sopr!=="ok"&&s.sopr!=="aguardando"?txt(s.sopr):""}</span>`+
+    `<span><i class="dot ${d(s.corretoras)}"></i>outras corretoras${s.corretoras==="ok"?"":txt(s.corretoras)}</span>`+
     `<span><i class="dot ${d(s.externo)}"></i>fontes externas${s.externo==="ok"?"":txt(s.externo)}</span>`+
     `<span><i class="dot ${d(s.lab)}"></i>laboratório${s.lab==="ok"&&E.lab_atualizado?" atualizado "+hm(E.lab_atualizado):s.lab==="calculando"?" calculando...":txt(s.lab)}</span>`;
 }
@@ -443,11 +446,32 @@ function renderFluxo(){
       <div class="kpi"><div class="r">Paredes do livro</div><div style="font-weight:700;margin-top:4px">${pa.aquecendo?"aguardando 3 leituras…":`${(pa.reais||[]).length} firmes · ${(pa.sumidas_compra||0)+(pa.sumidas_venda||0)} sumiram rápido`}</div>
         <span class="fr" style="font-size:12px">Só paredes que ficam em 3 leituras seguidas contam. As que somem rápido são tratadas como blefe.</span></div>
     </div>
+    ${(() => { const pc = m.corretoras || {}, nomes = {binance:"Binance",bybit:"Bybit",okx:"OKX",coinbase:"Coinbase"}, ks = Object.keys(pc);
+      if (!ks.length) return "";
+      return `<div class="fr" style="margin:6px 0 4px">Fluxo por corretora (janela de ${E.janela_minutos} min)</div><div style="overflow-x:auto"><table class="compacta"><tr><th>Corretora</th><th>Compras agressivas</th><th>Vendas agressivas</th><th>Saldo</th></tr>` +
+        ks.map(c => `<tr><td>${nomes[c]||c}</td><td class="pos">${fu(pc[c].compra)}</td><td class="neg">${fu(pc[c].venda)}</td><td class="${cls(pc[c].compra-pc[c].venda)}">${fu(pc[c].compra-pc[c].venda)}</td></tr>`).join("") + `</table></div>`; })()}
     ${evs?`<div style="overflow-x:auto"><table class="compacta"><tr><th>Hora</th><th class="esq">Evento</th><th>Volume</th><th>Intensidade</th><th>Preço</th></tr>${evs}</table></div>`:""}
     ${(pa.reais||[]).length?`<div class="fr" style="margin:10px 0 4px">Paredes firmes agora</div>`+pa.reais.map(w=>`<div class="degrau ${w.lado==="compra"?"sup":"res"}"><div><b>${fp(w.preco)}</b> <span class="tag">${w.lado==="compra"?"compra":"venda"} · ${fu(w.valor)} · há ${w.minutos} min</span></div><span class="fr">${pc((w.preco/m.preco-1)*100)}</span></div>`).join(""):""}`;
 }
+let mapaCache = {}, mapaPedido = {};
+async function renderMapa(){
+  const m = moeda(), el = document.getElementById("mapa-card"); if(!el) return;
+  if(!mapaCache[m.simbolo] || Date.now() - (mapaPedido[m.simbolo]||0) > 60000){ mapaPedido[m.simbolo] = Date.now(); mapaCache[m.simbolo] = await (await fetch(`/api/mapa?simbolo=${m.simbolo}`)).json(); }
+  const ml = mapaCache[m.simbolo], F = (ml.faixas||[]).filter(f => f.preco > m.preco*0.88 && f.preco < m.preco*1.12);
+  if(!F.length){ el.innerHTML = `<h3>Mapa estimado de liquidações · ${m.nome}</h3><div class="vazio">${m.futuros?"Calculando (atualiza de hora em hora)…":"Sem futuros na Binance para esta moeda."}</div>`; return; }
+  const mx = Math.max(...F.map(f => Math.max(f.long, f.short))) || 1;
+  el.innerHTML = `<h3>Mapa estimado de liquidações · ${m.nome}</h3>
+    <p class="expl">Estimativa a partir da abertura de posições nos futuros da Binance nos últimos ~20 dias (open interest, proporção de comprados e alavancagens típicas). Vermelho = apostas na alta que seriam liquidadas se o preço cair até ali; verde = apostas na queda liquidadas se subir. O preço costuma ser "atraído" para as maiores concentrações.</p>
+    <div class="kpis"><div class="kpi"><div class="r">Até +5% (apostas na queda)</div><div class="v pos" style="font-size:18px">${fu(ml.acima_5pct)}</div><span class="fr">maior ímã: ${ml.ima_acima?fp(ml.ima_acima):"-"}</span></div>
+      <div class="kpi"><div class="r">Até −5% (apostas na alta)</div><div class="v neg" style="font-size:18px">${fu(ml.abaixo_5pct)}</div><span class="fr">maior ímã: ${ml.ima_abaixo?fp(ml.ima_abaixo):"-"}</span></div></div>
+    ${ml.leitura?`<p style="margin:0 0 10px">${esc(ml.leitura)}</p>`:""}
+    <div class="perfil">${[...F].reverse().map(f => { const agora = Math.abs(f.preco - m.preco) < m.preco*0.0025;
+      return `<div class="f ${agora?"agora":""}" style="grid-template-columns:78px 1fr 1fr"><span style="text-align:right">${fp(f.preco)}${agora?" ◀":""}</span>
+        <div style="display:flex;justify-content:flex-end"><div class="b" style="width:${f.long/mx*100}%;background:rgba(240,82,90,.7)"></div></div>
+        <div><div class="b" style="width:${f.short/mx*100}%;background:rgba(34,197,94,.7)"></div></div></div>`; }).join("")}</div>`;
+}
 function renderSmart(){
-  setTimeout(renderHL, 0); setTimeout(renderFluxo, 0);
+  setTimeout(renderHL, 0); setTimeout(renderFluxo, 0); setTimeout(renderMapa, 0);
   document.getElementById("smart-expl").textContent = `Janela dos últimos ${E.janela_minutos} minutos. Clique numa linha para ver as últimas baleias.`;
   const cab = ["Moeda","Preço","24h","Baleias compra","Baleias venda","CVD","Livro ±2%","Funding","OI 1h","L/S top","RSI 1h","Liq. longs / shorts","Placar"];
   document.getElementById("tab-smart").innerHTML = `<tr>${cab.map(c=>`<th>${c}</th>`).join("")}</tr>` + E.moedas.map(m => `
@@ -666,8 +690,14 @@ function renderMercado(){
     alts.map(m => `<tr class="click ${m.simbolo===sel?"sel":""}" onclick="selecionar('${m.simbolo}')"><td><i class="bola" style="background:${corMoeda(m.nome)}"></i> <b>${m.nome}</b></td>
       <td class="${cls(m.forca_btc.var7_pct)}">${pc(m.forca_btc.var7_pct)}</td><td class="${cls(m.forca_btc.var30_pct)}">${pc(m.forca_btc.var30_pct)}</td><td class="${cls(m.forca_btc.var90_pct)}">${pc(m.forca_btc.var90_pct)}</td>
       <td class="esq"><span class="pill ${m.forca_btc.tom}">${esc(m.forca_btc.texto)}</span></td></tr>`).join("");
+  const st = x.stable, ops = E.moedas.filter(m => m.opcoes);
+  document.getElementById("mg-opcoes").innerHTML =
+    (st ? `<div class="linha-info"><span>Stablecoins (USDT + USDC)<br><span class="fr" style="font-size:12px">Dinheiro "parado" pronto para comprar cripto. Crescendo = dinheiro novo entrando.</span></span><span style="text-align:right">${fu(st.total)}<br><span class="${cls(st.var7_pct)}">${pc(st.var7_pct,2)} 7d</span> · <span class="${cls(st.var30_pct)}">${pc(st.var30_pct,2)} 30d</span></span></div>` : "") +
+    ops.map(m => { const o = m.opcoes; return `<div class="linha-info"><span><b>${m.nome}</b> · ${esc(o.leitura)}<br><span class="fr" style="font-size:12px">put/call ${o.put_call!=null?nf(o.put_call,2):"-"} · skew ${o.skew!=null?nf(o.skew,1)+" pts":"-"} · volatilidade esperada (DVOL) ${o.dvol!=null?nf(o.dvol,1):"-"}${o.dvol_var7_pct!=null?" ("+pc(o.dvol_var7_pct)+" 7d)":""}</span></span>
+      <span style="text-align:right">máxima dor<br><b>${fp(o.max_dor)}</b> <span class="fr">(${pc(o.max_dor_dist_pct)})</span><br><span class="fr" style="font-size:12px">vence em ${o.dias_vencimento!=null?nf(o.dias_vencimento,0):"-"} dias</span></span></div>`; }).join("") ||
+    '<div class="fr">Carregando…</div>';
   const at = x.atualizado || {}, er = x.erros || {};
-  const nomes = ["hyperliquid","ranking hyperliquid","baleias hyperliquid","coinbase","medo e ganância","dominância"];
+  const nomes = ["hyperliquid","ranking hyperliquid","baleias hyperliquid","coinbase","medo e ganância","dominância","stablecoins","mapa de liquidações","opções BTC (Deribit)","opções ETH (Deribit)"];
   document.getElementById("mg-fontes").innerHTML = nomes.map(n => `<div class="linha-info"><span>${n}</span><span>${er[n]?`<span class="neg">fora do ar: ${esc(er[n])}</span>`:at[n]?`<span class="pos">ok</span> · ${hm(at[n])}`:"aguardando"}</span></div>`).join("");
 }
 function graficoSimples(el, h){ return LightweightCharts.createChart(el, {height:h, autoSize:true,

@@ -196,6 +196,13 @@ function traduzir(t) {   // motivos técnicos -> português do dia a dia
     [/\(distribuição\)$/, "Preço parado, mas investidores vendendo de verdade enquanto especuladores compram (distribuição)"],
     [/^vendas fortes sendo absorvidas/, "Vendas fortes não conseguem derrubar o preço: tem um comprador grande segurando"],
     [/^compras fortes sendo absorvidas/, "Compras fortes não conseguem subir o preço: tem um vendedor grande segurando"],
+    [/^profissionais comprando proteção/, "Os profissionais estão se protegendo contra queda (medo), o que muitas vezes acontece perto de fundos"],
+    [/^profissionais apostando na alta/, "Os profissionais estão muito otimistas, o que pede cautela"],
+    [/^vencimento de opções em (\d+) dia\(s\) com "preço de máxima dor" em (.+)$/, m => `Em ${m[1]} dia(s) vencem contratos de opções, e o preço costuma ser puxado para perto de ${m[2]}`],
+    [/^muitas apostas na queda seriam liquidadas acima, perto de ([^:]+):/, m => `Muita gente apostando na queda seria forçada a sair perto de ${m[1]}, o que pode empurrar o preço para cima`],
+    [/^muitas apostas na alta seriam liquidadas abaixo, perto de ([^:]+):/, m => `Muita gente apostando na alta seria forçada a sair perto de ${m[1]}, o que pode puxar o preço para baixo`],
+    [/^dinheiro novo entrando/, "Está entrando dinheiro novo no mercado cripto"],
+    [/^dinheiro saindo do mercado/, "Está saindo dinheiro do mercado cripto"],
     [/^compra e venda equilibradas/, "Não há sinais fortes nem para comprar nem para vender"],
     [/^leve viés de compra/, "Leve inclinação para compra, mas ainda sem confirmação"],
     [/^leve viés de venda/, "Leve inclinação para venda, mas ainda sem confirmação"],
@@ -212,7 +219,9 @@ function clima() {
   if (v != null) humor = v <= 25 ? `O clima está de <b>muito medo</b> (${v}/100). Costuma ser época de oportunidade para quem compra com calma.`
     : v <= 45 ? `O clima está de <b>medo</b> (${v}/100).` : v <= 55 ? `O clima está <b>neutro</b> (${v}/100).`
     : v <= 75 ? `O clima está de <b>otimismo</b> (${v}/100).` : `O clima está de <b>euforia</b> (${v}/100). Hora de cautela com compras.`;
-  return `<div class="clima"><div class="emo">${dir[0]}</div><div><b>${dir[1]}</b><div class="fr" style="font-size:14.5px">${humor || "Analisando o mercado…"}</div></div></div>`;
+  const st = E.externo?.stable;
+  const dinheiro_ = st && st.var7_pct != null ? `<div class="fr" style="font-size:14.5px;margin-top:4px">${st.tom === "alta" ? "💵 Está <b>entrando dinheiro novo</b> no mercado cripto" : st.tom === "baixa" ? "💸 Está <b>saindo dinheiro</b> do mercado cripto" : "💵 Entrada de dinheiro novo no mercado: <b>estável</b>"} (${usd(st.var7_usd)} na semana).</div>` : "";
+  return `<div class="clima"><div class="emo">${dir[0]}</div><div><b>${dir[1]}</b><div class="fr" style="font-size:14.5px">${humor || "Analisando o mercado…"}</div>${dinheiro_}</div></div>`;
 }
 
 // ===================================================================== plano simples (mesma lógica da aba Plano)
@@ -231,6 +240,7 @@ function niveis(m) {
   const entradas = [P, sup[0], sup[1]], stop = Math.max(Math.min(...entradas) - atr, P * 0.05);
   return {entradas, stop, alvos: res.slice(0, 3)};
 }
+const maiuscula = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 function planoHTML(m) {
   const P = m.preco, {entradas, stop, alvos} = niveis(m), x = m.sinal;
   const tem = m.quantidade > 0 && m.preco_medio > 0;
@@ -265,7 +275,18 @@ function planoHTML(m) {
     if (rv) grandes.push(`Há uma ordem grande e firme de <b>venda</b> esperando em ${dinheiro(rv.preco)} (${usd(rv.valor)}), que pode segurar altas.`);
     if (pa.sumidas_compra + pa.sumidas_venda >= 3) grandes.push(`Atenção: ${pa.sumidas_compra + pa.sumidas_venda} ordens grandes apareceram e sumiram rápido na última hora (possíveis blefes). O radar ignora essas.`);
   }
+  const nc = Object.keys(m.corretoras || {}).length;
+  if (nc > 1 && grandes.length) grandes.unshift(`<span class="fr">(Somando ${nc} corretoras: ${Object.keys(m.corretoras).map(c => ({binance: "Binance", bybit: "Bybit", okx: "OKX", coinbase: "Coinbase"})[c] || c).join(", ")}.)</span>`);
   if (grandes.length) h += `<h4>🐋 O que os grandes investidores estão fazendo</h4><p style="margin:0">${grandes.join(" ")}</p>`;
+  const ml = m.mapa_liq;
+  if (ml && (ml.ima_acima || ml.ima_abaixo)) {
+    h += `<h4>🧲 Onde o preço pode ser "puxado"</h4><p style="margin:0">Estimativa de onde há muitas apostas alavancadas que seriam forçadas a fechar:`;
+    if (ml.ima_acima) h += ` acima, perto de <b>${dinheiro(ml.ima_acima)}</b> (${pct((ml.ima_acima / m.preco - 1) * 100)});`;
+    if (ml.ima_abaixo) h += ` abaixo, perto de <b>${dinheiro(ml.ima_abaixo)}</b> (${pct((ml.ima_abaixo / m.preco - 1) * 100)}).`;
+    h += ` ${ml.tom === "alta" ? "Hoje o lado de cima pesa mais, o que favorece subida." : ml.tom === "baixa" ? "Hoje o lado de baixo pesa mais, o que favorece queda." : "Os dois lados estão equilibrados."}</p>`;
+  }
+  const op = m.opcoes;
+  if (op) h += `<h4>🎯 O que os profissionais de opções esperam</h4><p style="margin:0">${maiuscula(traduzir(op.leitura))}.${op.max_dor && op.dias_vencimento != null ? ` O próximo vencimento grande é em ${Math.max(1, Math.round(op.dias_vencimento))} dias, e o preço costuma ser puxado para perto de <b>${dinheiro(op.max_dor)}</b> até lá.` : ""}</p>`;
   // histórico
   const at = (m.lab?.ativos || []).filter(a => a.tom === "bom" || a.tom === "fraco");
   if (at.length) { const a = at[0];
@@ -343,6 +364,8 @@ function telaAjustes() {
       <button class="badge" style="border:0;cursor:pointer;font-size:14px;padding:8px 12px" onclick="ativarNotif(this)">${a.notificacoes && window.Notification && Notification.permission === "granted" ? "Ligados ✔" : "Ativar"}</button></div>
     <label class="chave"><span>📶 Economizar internet<br><span class="fr" style="font-size:13px">Desliga o acompanhamento das ordens em tempo real. Bom para usar no 4G.</span></span>
       <input type="checkbox" id="aj-eco" ${a.fluxo_ao_vivo ? "" : "checked"}></label>
+    <label class="chave"><span>🏦 Somar outras corretoras<br><span class="fr" style="font-size:13px">Junta Bybit, OKX e Coinbase ao fluxo da Binance (mais preciso, usa mais internet).</span></span>
+      <input type="checkbox" id="aj-corr" ${a.mais_corretoras ? "checked" : ""}></label>
     <label class="chave"><span>🔊 Som nos avisos</span><input type="checkbox" id="aj-som" ${a.som ? "checked" : ""}></label>
     <button class="btn prim" onclick="salvar()">Salvar</button>`;
 }
@@ -365,7 +388,8 @@ function salvar() {
     quantidade: numero(d.querySelector(".aj-q").value), preco_medio: numero(d.querySelector(".aj-p").value), trade_grande_usd: Number(d.querySelector(".aj-b").value) || 50000}));
   if (!moedas.length) { alert("Deixe pelo menos uma moeda."); return; }
   const eco = document.getElementById("aj-eco"), som = document.getElementById("aj-som");
-  Radar.salvar({moedas, fluxo_ao_vivo: eco ? !eco.checked : true, som: som ? som.checked : true});
+  const corr = document.getElementById("aj-corr");
+  Radar.salvar({moedas, fluxo_ao_vivo: eco ? !eco.checked : true, som: som ? som.checked : true, mais_corretoras: corr ? corr.checked : true});
 }
 async function ativarNotif(b) { const r = await Radar.pedirNotificacao();
   b.textContent = r === "granted" ? "Ligados ✔" : r === "sem_suporte" ? "Sem suporte" : "Bloqueados"; }

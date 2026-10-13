@@ -20,7 +20,8 @@ const PADRAO = {
   ],
   janela_minutos: 60, intervalo_indicadores: 60, fluxo_ao_vivo: true, hyperliquid: true,
   hl_contas: 60, hl_saldo_min: 1000000, notificacoes: false, som: true,
-  avisos_simples: true,   // notificar só mudanças do sinal direto, em linguagem simples
+  avisos_simples: true,
+  mais_corretoras: true,  // somar Bybit, OKX e Coinbase ao fluxo da Binance   // notificar só mudanças do sinal direto, em linguagem simples
   oi_variacao_pct: 5, funding_extremo_pct: 0.05, liquidacoes_usd: 1000000, faixa_livro_pct: 2,
 };
 const ls = {
@@ -55,9 +56,11 @@ const hlPost = corpo => http(HL_INFO, null, {method: "POST", headers: {"Content-
 
 // ------------------------------------------------------------ estado do motor
 const M = {
-  moedas: new Map(), status: {spot: "conectando", futuros: "conectando", indicadores: "aguardando", sopr: "aguardando", lab: "aguardando", externo: "aguardando"},
+  inicio: Date.now() / 1000,
+  moedas: new Map(), status: {spot: "conectando", futuros: "conectando", corretoras: "aguardando", indicadores: "aguardando", sopr: "aguardando", lab: "aguardando", externo: "aguardando"},
   sopr_atualizado: 0, sopr_intervalo: 3600, lab: {}, lab_atualizado: 0, lab_vivo: {dias: 0, moedas: {}},
-  externo: {hl_mercado: {}, baleias_hl: {}, coinbase: {}, etf: {}, medo: {}, dominancia: {}, atualizado: {}, erros: {}},
+  externo: {hl_mercado: {}, baleias_hl: {}, coinbase: {}, etf: {}, medo: {}, dominancia: {}, stable: null, opcoes: {}, atualizado: {}, erros: {}},
+  mapas: {}, corretoras: {},
   forca: {}, sinais: {}, alertas: ls.get("radar_alertas", []), placarAnt: {}, tomAnt: {}, hlAnt: {}, ultimoAviso: {},
   estab: new C.Estabilizador(Math.max(2, Math.ceil(120 / AJ.intervalo_indicadores))),
   ws: {},
@@ -140,8 +143,54 @@ function ligarFluxo() {
   const fut = [...M.moedas.values()].filter(e => e.futuros_disponivel).map(e => e.simbolo.toLowerCase());
   abrirWS("spot", BN.wsSpot, l.map(s => s + "@aggTrade"), "spot");
   abrirWS("futuros", BN.wsFut, [...fut.map(s => s + "@aggTrade"), ...fut.map(s => s + "@forceOrder")], "futuros");
+  if (AJ.mais_corretoras) for (const n of Object.keys(EXTRAS)) abrirExtra(n);
 }
-function desligarFluxo() { for (const n of ["spot", "futuros"]) { try { M.ws[n]?.close(); } catch (e) {} M.ws[n] = null; } }
+// ---------- outras corretoras (Bybit, OKX, Coinbase): só fluxo e baleias
+const EXTRAS = {
+  bybit_spot: {url: "wss://stream.bybit.com/v5/public/spot", origem: "spot", corretora: "bybit",
+    subs: ss => ss.map(s => JSON.stringify({op: "subscribe", args: ["publicTrade." + s]})), ping: () => JSON.stringify({op: "ping"}), intervalo: 20000,
+    tratar(d) { if (!d.topic?.startsWith("publicTrade.")) return; for (const t of d.data || []) entradaExtra(t.s, +t.p, +t.v, t.S === "Sell", "spot", t.T / 1000, "bybit"); }},
+  bybit_fut: {url: "wss://stream.bybit.com/v5/public/linear", origem: "futuros", corretora: "bybit",
+    subs: ss => ss.map(s => JSON.stringify({op: "subscribe", args: ["publicTrade." + s]})), ping: () => JSON.stringify({op: "ping"}), intervalo: 20000,
+    tratar(d) { if (!d.topic?.startsWith("publicTrade.")) return; for (const t of d.data || []) entradaExtra(t.s, +t.p, +t.v, t.S === "Sell", "futuros", t.T / 1000, "bybit"); }},
+  okx: {url: "wss://ws.okx.com:8443/ws/v5/public", origem: "spot", corretora: "okx",
+    subs: ss => ss.map(s => JSON.stringify({op: "subscribe", args: [{channel: "trades", instId: s.replace("USDT", "-USDT")}]})), ping: () => "ping", intervalo: 25000,
+    tratar(d) { if (d.arg?.channel !== "trades") return; for (const t of d.data || []) entradaExtra(t.instId.replace("-", ""), +t.px, +t.sz, t.side === "sell", "spot", +t.ts / 1000, "okx"); }},
+  coinbase: {url: "wss://ws-feed.exchange.coinbase.com", origem: "spot", corretora: "coinbase",
+    subs: ss => ss.map(s => JSON.stringify({type: "subscribe", product_ids: [s.replace("USDT", "-USD")], channels: ["matches"]})), ping: null,
+    // na Coinbase, "side" é o lado de quem deixou a ordem parada: side "buy" = o agressor VENDEU
+    tratar(d) { if (d.type !== "match") return; entradaExtra(d.product_id.replace("-USD", "USDT"), +d.price, +d.size, d.side === "buy", "spot", Date.parse(d.time) / 1000, "coinbase"); }},
+};
+function entradaExtra(simbolo, preco, qtd, vendedor, origem, ts, corretora) {
+  const est = M.moedas.get(simbolo); if (!est || !(preco > 0) || !(qtd > 0)) return;
+  M.corretoras[corretora] = agoraS();
+  const ev = est.registrarTrade(preco, qtd, vendedor, origem, ts, corretora);
+  if (ev) emitir(est.simbolo, "baleia_" + ev.lado, `Baleia ${ev.lado === "compra" ? "COMPROU" : "VENDEU"} ${C.fmtUsd(ev.valor)} a mercado (${corretora} ${origem}) a ${C.fmtPreco(ev.preco)}`,
+    {espera: 0, importante: ev.valor >= est.trade_grande_usd * 3, tom: ev.lado === "compra" ? "alta" : "baixa"});
+}
+function abrirExtra(nome) {
+  const cfg = EXTRAS[nome], atual = M.ws[nome];
+  if (atual && (atual.readyState === 0 || atual.readyState === 1)) return;
+  const espera = M.ws[nome + "_espera"] || 3000;
+  let ws; try { ws = new WebSocket(cfg.url); } catch (e) { return; }
+  M.ws[nome] = ws;
+  ws.onopen = () => { M.ws[nome + "_espera"] = 3000; for (const msg of cfg.subs([...M.moedas.keys()])) ws.send(msg);
+    if (cfg.ping) M.ws[nome + "_ping"] = setInterval(() => { try { ws.send(cfg.ping()); } catch (e) {} }, cfg.intervalo); };
+  ws.onmessage = ev => { if (typeof ev.data !== "string" || ev.data === "pong") return; try { cfg.tratar(JSON.parse(ev.data)); } catch (e) {} };
+  ws.onclose = () => { clearInterval(M.ws[nome + "_ping"]);
+    if (M.pausado || !AJ.fluxo_ao_vivo || !AJ.mais_corretoras) return;
+    M.ws[nome + "_espera"] = Math.min(espera * 2, 120000);
+    setTimeout(() => { if (document.visibilityState === "visible" && !M.pausado) abrirExtra(nome); }, espera); };
+  ws.onerror = () => {};
+}
+function statusCorretoras() {
+  if (!AJ.fluxo_ao_vivo || !AJ.mais_corretoras) { M.status.corretoras = "desligado"; return; }
+  const t = agoraS(), nomes = {bybit: "Bybit", okx: "OKX", coinbase: "Coinbase"};
+  const vivas = Object.keys(nomes).filter(c => t - (M.corretoras[c] || 0) < 180);
+  M.status.corretoras = vivas.length === 3 ? "ok" : vivas.length ? "parcial: só " + vivas.map(c => nomes[c]).join(", ") : (t - M.inicio < 60 ? "conectando" : "parcial: nenhuma respondeu");
+}
+setInterval(statusCorretoras, 5000);
+function desligarFluxo() { for (const n of ["spot", "futuros", ...Object.keys(EXTRAS)]) { try { M.ws[n]?.close(); } catch (e) {} M.ws[n] = null; } }
 
 // ------------------------------------------------------------ verificação inicial
 async function verificarSimbolos() {
@@ -414,6 +463,43 @@ async function rodadaMercadoGlobal() {
   if (dm) M.externo.dominancia = dm;
 }
 
+// ------------------------------------------------------------ opções (Deribit), mapa de liquidações, stablecoins
+async function rodadaOpcoes() {
+  for (const moeda of ["BTC", "ETH"]) {
+    if (!M.moedas.has(moeda + "USDT")) continue;
+    const r = await fonte("opções " + moeda + " (Deribit)", async () => {
+      const livro = (await http("https://www.deribit.com/api/v2/public/get_book_summary_by_currency", {currency: moeda, kind: "option"}, {timeout: 30000})).result;
+      let dvol = null;
+      try { const fim = Date.now(); dvol = (await http("https://www.deribit.com/api/v2/public/get_volatility_index_data",
+        {currency: moeda, start_timestamp: fim - 9 * 864e5, end_timestamp: fim, resolution: 3600})).result?.data || null; } catch (e) {}
+      const a = C.analisarOpcoes(livro, dvol); if (!a) throw new Error("sem dados de opções");
+      return a;
+    });
+    if (r) M.externo.opcoes[moeda] = r;
+  }
+}
+async function rodadaMapas() {
+  const erros = [];
+  for (const est of M.moedas.values()) {
+    if (!est.futuros_disponivel) continue;
+    try {
+      const s = est.simbolo;
+      const [oi, kl, lsr] = await Promise.all([
+        http(BN.fut + "/futures/data/openInterestHist", {symbol: s, period: "1h", limit: 500}),
+        http(BN.fut + "/fapi/v1/klines", {symbol: s, interval: "1h", limit: 500}),
+        http(BN.fut + "/futures/data/globalLongShortAccountRatio", {symbol: s, period: "1h", limit: 500}).catch(() => [])]);
+      M.mapas[s] = C.mapaLiquidacoes(oi, kl, lsr, est.preco || +kl[kl.length - 1][4]);
+    } catch (e) { erros.push(est.simbolo); }
+    await dormir(50);
+  }
+  if (erros.length) M.externo.erros["mapa de liquidações"] = "falhou: " + erros.join(", "); else { delete M.externo.erros["mapa de liquidações"]; M.externo.atualizado["mapa de liquidações"] = agoraS(); }
+  statusExterno();
+}
+async function rodadaStable() {
+  const r = await fonte("stablecoins", async () => C.analisarStablecoins((await http("https://stablecoins.llama.fi/stablecoins", {includePrices: "false"}, {timeout: 30000})).peggedAssets));
+  if (r) M.externo.stable = r;
+}
+
 // ------------------------------------------------------------ sinal direto
 function regimeDe(e) {
   if (!e.ciclo) return {};
@@ -463,6 +549,8 @@ function estadoMoeda(e) {
     forca_btc: fb, filtro_btc: e.simbolo !== "BTCUSDT" ? filtroBtcAoVivo() : null, sinal: M.sinais[e.simbolo] || null,
     condutor: e.condutor(), absorcao: e.absorcao.resumo(), paredes: e.paredesResumo(),
     pesos: M.lab[e.simbolo]?.pesos || null,
+    opcoes: M.externo.opcoes[n] || null, mapa_liq: M.mapas[e.simbolo] ? {...M.mapas[e.simbolo], faixas: undefined} : null,
+    stable: M.externo.stable, corretoras: e.fluxo.porCorretora(),
   };
 }
 function conclusao(moedas) {
@@ -488,7 +576,7 @@ function conclusao(moedas) {
   return {titulo: med > 15 ? "Mercado com viés comprador" : med < -15 ? "Mercado com viés vendedor" : "Mercado sem direção clara", texto: t};
 }
 function estado() {
-  const moedas = [...M.moedas.values()].map(estadoMoeda), {baleias_hl, hl_mercado, ...ext} = M.externo;
+  const moedas = [...M.moedas.values()].map(estadoMoeda), {baleias_hl, hl_mercado, opcoes, ...ext} = M.externo;
   return {agora: agoraS(), status: M.status, sopr_atualizado: M.sopr_atualizado, lab_atualizado: M.lab_atualizado, externo: ext,
     sopr_proximo: M.sopr_atualizado ? M.sopr_atualizado + M.sopr_intervalo : null, janela_minutos: AJ.janela_minutos,
     moedas, conclusao: conclusao(moedas), alertas: [...M.alertas].slice(-80).reverse(), versao_celular: true};
@@ -506,6 +594,7 @@ window.fetch = async (url, opcoes) => {
       case "/api/perfil": corpo = e?.ciclo ? {faixas: e.ciclo.suportes.faixas, custo: e.ciclo.resumo.custo_curto_prazo} : {faixas: []}; break;
       case "/api/lab": corpo = {lab: M.lab[s] || null, vivo: M.lab_vivo.moedas[s.replace("USDT", "")] || null, vivo_dias: M.lab_vivo.dias || 0, atualizado: M.lab_atualizado}; break;
       case "/api/forca": corpo = {serie: M.forca[s]?.serie || []}; break;
+      case "/api/mapa": corpo = M.mapas[s] || {faixas: []}; break;
       case "/api/qr": corpo = {ativo: false, itens: []}; break;
       default: corpo = {};
     }
@@ -538,6 +627,9 @@ async function iniciar() {
   lacos.lab = laco("lab", () => (M.sopr_atualizado ? rodadaLab() : Promise.resolve()), () => (M.lab_atualizado ? 6 * 3600 : 5), 3);
   lacos.hl = laco("hyperliquid", rodadaHyperliquid, 600, 4);
   lacos.global = laco("mercado global", rodadaMercadoGlobal, 3600, 2);
+  lacos.opcoes = laco("opções", rodadaOpcoes, 1800, 5);
+  lacos.mapas = laco("mapa de liquidações", rodadaMapas, 3600, 6);
+  lacos.stable = laco("stablecoins", rodadaStable, 6 * 3600, 3);
 }
 let timerPausa = null;
 document.addEventListener("visibilitychange", () => {

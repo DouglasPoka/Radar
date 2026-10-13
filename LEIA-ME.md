@@ -48,6 +48,18 @@ Ela só precisa ficar hospedada em algum lugar para você abrir pelo link. Vamos
   realmente funcionaram (treino nos primeiros 70% dos dias, confirmação nos 30% finais) e reforça ou
   reduz o peso de cada um. Veja em Modo completo → Laboratório.
 
+- **Outras corretoras**: além da Binance, o fluxo ao vivo soma as compras e vendas da Bybit (à vista e
+  futuros), OKX e Coinbase. Assim uma baleia que opera fora da Binance também aparece. Pode desligar em
+  Minhas moedas → "🏦 Somar outras corretoras" (economiza internet).
+- **Opções (Deribit)** — só BTC e ETH: mostra se os profissionais estão comprando proteção contra queda
+  (medo) ou apostando na alta, a "máxima dor" (preço para onde o mercado costuma ser puxado até o
+  vencimento) e a volatilidade esperada. Atualiza a cada 30 min.
+- **Mapa estimado de liquidações**: estima, a partir das posições abertas nos futuros da Binance, em que
+  preços muitas apostas alavancadas seriam forçadas a fechar. O preço costuma ser "atraído" para essas
+  regiões. É uma **estimativa** (os dados exatos não são públicos). Atualiza a cada hora.
+- **Stablecoins (USDT + USDC)**: quando o total cresce, há dinheiro novo pronto para comprar cripto;
+  quando cai, dinheiro saindo. Atualiza a cada 6 horas.
+
 Tudo isso entra na decisão da tela inicial e aparece em "🐋 Dinheiro grande agora" e no "Ver plano".
 
 ## Bateria
@@ -79,13 +91,15 @@ Diferenças:
 - **Fluxo ao vivo** (baleias da Binance, CVD, liquidações) conta a partir do momento em que você abre o app.
 - **Alertas e notificações** acontecem enquanto o app está aberto (ou logo depois de você sair dele).
   Não chegam com o app fechado há muito tempo.
+- Se alguma fonte nova (Deribit, stablecoins ou as outras corretoras) for bloqueada pela sua internet,
+  o radar continua funcionando sem ela; no Modo completo → Mercado global ela aparece com erro.
 - **Fluxo dos ETFs** fica só na versão do PC (o site de onde ele vem não permite acesso pelo navegador).
 - **Teste ao vivo** do Laboratório: o app guarda uma "foto" do placar e do sinal a cada 15 minutos
   enquanto está aberto. Quanto mais você usar, mais confiável fica.
 
 ## Consumo de internet
 
-- Com o **fluxo ao vivo** ligado: cerca de 10 a 20 MB por hora com o app aberto (desligue em Ajustes
+- Com o **fluxo ao vivo** ligado: cerca de 10 a 20 MB por hora (um pouco mais com as outras corretoras ligadas) com o app aberto (desligue em Ajustes
   se estiver no 4G e quiser economizar).
 - Baleias da Hyperliquid: o ranking de traders é baixado uma vez por dia (alguns MB).
 - Laboratório: ~3 MB a cada 6 horas.

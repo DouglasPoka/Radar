@@ -38,7 +38,7 @@ const lim01 = x => Math.max(0, Math.min(1, x));
 class Janela {   // eventos dos últimos N segundos com somas mantidas incrementalmente
   constructor(seg) { this.seg = seg; this.ev = []; this.ini = 0; this.s = {}; this.n = {}; }
   _mexe(e, sinal) {
-    const k = e.lado + "|" + e.origem;
+    const k = e.lado + "|" + e.origem + "|" + (e.corretora || "binance");
     this.s[k] = (this.s[k] || 0) + sinal * e.valor;
     this.n[e.lado] = (this.n[e.lado] || 0) + sinal;
   }
@@ -48,14 +48,19 @@ class Janela {   // eventos dos últimos N segundos com somas mantidas increment
     while (this.ini < this.ev.length && this.ev[this.ini].ts < lim) this._mexe(this.ev[this.ini++], -1);
     if (this.ini > 5000 && this.ini > this.ev.length / 2) { this.ev = this.ev.slice(this.ini); this.ini = 0; }
   }
-  soma(lado, origem) {
+  soma(lado, origem, corretora) {
     this.limpar(Math.max(Date.now() / 1000, this.ev.length ? this.ev[this.ev.length - 1].ts : 0));
     let t = 0;
     for (const [k, v] of Object.entries(this.s)) {
-      const [l, o] = k.split("|");
-      if ((lado == null || l === lado) && (origem == null || o === origem)) t += v;
+      const [l, o, c] = k.split("|");
+      if ((lado == null || l === lado) && (origem == null || o === origem) && (corretora == null || c === corretora)) t += v;
     }
     return Math.max(0, t);
+  }
+  porCorretora() {
+    this.soma(); const out = {};
+    for (const [k, v] of Object.entries(this.s)) { const [l, , c] = k.split("|"); out[c] = out[c] || {compra: 0, venda: 0}; out[c][l] += Math.max(0, v); }
+    return out;
   }
   contar(lado) { this.soma(); return lado == null ? Object.values(this.n).reduce((a, b) => a + b, 0) : (this.n[lado] || 0); }
 }
@@ -111,10 +116,14 @@ class EstadoMoeda {
     this.paredes_sumidas = [];                // paredes grandes que sumiram rápido (suspeitas)
     this.leituras_livro = 0;
   }
-  registrarTrade(preco, qtd, vendedorAgressor, origem, ts) {
+  registrarTrade(preco, qtd, vendedorAgressor, origem, ts, corretora = "binance") {
     ts = ts || Date.now() / 1000;
-    const ev = {ts, valor: preco * qtd, lado: vendedorAgressor ? "venda" : "compra", origem, preco};
+    const ev = {ts, valor: preco * qtd, lado: vendedorAgressor ? "venda" : "compra", origem, preco, corretora};
     this.fluxo.add(ev);
+    if (corretora !== "binance") {             // outras corretoras: entram no fluxo e nas baleias, não no preço
+      if (ev.valor >= this.trade_grande_usd) { this.baleias.add(ev); this.ultimas_baleias.unshift(ev); if (this.ultimas_baleias.length > 25) this.ultimas_baleias.pop(); return ev; }
+      return null;
+    }
     if (origem === "spot") {
       this.preco = preco;
       const u = this.precos[this.precos.length - 1];
@@ -623,6 +632,104 @@ function rodarLab(d1, d1Btc, xBtc) {
     sinais, pesos, precos: d1.slice(ini).map(v => ({t: v.t, preco: v.c})), _x: x};
 }
 
+// ------------------------------------------------------------ OPÇÕES (Deribit, BTC e ETH)
+const MESES_DERIBIT = {JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11};
+function analisarOpcoes(livro, dvol, agoraMs) {
+  agoraMs = agoraMs || Date.now();
+  const ops = [];
+  for (const o of livro || []) {
+    const m = /^[A-Z]+-(\d{1,2})([A-Z]{3})(\d{2})-([\d.]+)-([CP])$/.exec(o.instrument_name || ""); if (!m) continue;
+    const venc = Date.UTC(2000 + +m[3], MESES_DERIBIT[m[2]], +m[1], 8);
+    ops.push({venc, strike: +m[4], tipo: m[5], oi: +o.open_interest || 0, iv: o.mark_iv != null ? +o.mark_iv : null, und: +o.underlying_price || null});
+  }
+  if (!ops.length) return null;
+  const preco = ops.find(o => o.und)?.und;
+  const oiC = ops.filter(o => o.tipo === "C").reduce((s, o) => s + o.oi, 0), oiP = ops.filter(o => o.tipo === "P").reduce((s, o) => s + o.oi, 0);
+  // vencimento principal: o de maior interesse em aberto entre 2 e 45 dias
+  const porVenc = new Map(); for (const o of ops) porVenc.set(o.venc, (porVenc.get(o.venc) || 0) + o.oi);
+  const cand = [...porVenc.entries()].filter(([v]) => v - agoraMs > 2 * 864e5 && v - agoraMs < 45 * 864e5);
+  const venc = (cand.length ? cand : [...porVenc.entries()].filter(([v]) => v > agoraMs)).sort((a, b) => b[1] - a[1])[0]?.[0];
+  let maxDor = null, skew = null, dias = null;
+  if (venc) {
+    dias = (venc - agoraMs) / 864e5;
+    const ov = ops.filter(o => o.venc === venc), ks = [...new Set(ov.map(o => o.strike))].sort((a, b) => a - b);
+    let melhor = Infinity;
+    for (const K of ks) {   // preço em que os compradores de opções perdem mais (e os vendedores ganham mais)
+      const dor = ov.reduce((s, o) => s + o.oi * (o.tipo === "C" ? Math.max(0, K - o.strike) : Math.max(0, o.strike - K)), 0);
+      if (dor < melhor) { melhor = dor; maxDor = K; }
+    }
+    if (preco) {
+      const ivs = (tipo, a, b) => ov.filter(o => o.tipo === tipo && o.iv != null && o.strike >= preco * a && o.strike <= preco * b).map(o => o.iv);
+      const pu = ivs("P", 0.85, 0.95), ca = ivs("C", 1.05, 1.15);
+      if (pu.length && ca.length) skew = media(pu) - media(ca);   // >0: proteção contra queda mais cara (medo)
+    }
+  }
+  const pc = oiC ? oiP / oiC : null;
+  let leitura = "profissionais de opções sem posição clara", tom = "neutro";
+  if ((pc != null && pc > 1.1) || (skew != null && skew > 5)) [leitura, tom] = ["profissionais comprando proteção contra queda nas opções (medo)", "medo"];
+  else if (pc != null && pc < 0.6 && (skew == null || skew < 0)) [leitura, tom] = ["profissionais apostando na alta nas opções (otimismo)", "otimismo"];
+  const dv = dvol?.length ? dvol : null;
+  return {preco, put_call: pc, oi_calls: oiC, oi_puts: oiP, vencimento: venc ? venc / 1000 : null, dias_vencimento: dias,
+    max_dor: maxDor, max_dor_dist_pct: maxDor && preco ? (maxDor / preco - 1) * 100 : null, skew, leitura, tom,
+    dvol: dv ? dv[dv.length - 1][4] : null, dvol_var7_pct: dv && dv.length > 168 ? (dv[dv.length - 1][4] / dv[dv.length - 169][4] - 1) * 100 : null};
+}
+
+// ------------------------------------------------------------ MAPA ESTIMADO DE LIQUIDAÇÕES (Binance futuros)
+// Cada aumento do open interest numa hora = posições novas abertas naquele preço. Dividimos entre
+// compradas/vendidas pela proporção de contas, espalhamos por alavancagens típicas e calculamos onde
+// seriam liquidadas. Posições fechadas (OI caindo) e níveis já atingidos pelo preço saem do mapa.
+const ALAVANCAGENS = [[5, 0.15], [10, 0.3], [25, 0.3], [50, 0.15], [100, 0.1]];
+function mapaLiquidacoes(oiHist, velas, lsHist, precoAtual) {
+  const oi = new Map(oiHist.map(x => [Math.floor(+x.timestamp / 36e5), +x.sumOpenInterestValue]));
+  const ls = new Map((lsHist || []).map(x => [Math.floor(+x.timestamp / 36e5), +x.longAccount]));
+  const vs = velas.map(k => ({h: Math.floor(+k[0] / 36e5), alta: +k[2], baixa: +k[3], c: +k[4]})).filter(v => oi.has(v.h));
+  if (vs.length < 24 || !precoAtual) return null;
+  let pos = [], aberto = 0, ant = oi.get(vs[0].h);
+  for (const v of vs.slice(1)) {
+    const atual = oi.get(v.h), d = atual - ant; ant = atual;
+    if (d > 0) {
+      const fl = ls.get(v.h) ?? 0.5;
+      for (const [lev, peso] of ALAVANCAGENS) {
+        pos.push({lado: "long", preco: v.c * (1 - 1 / lev + 0.005), valor: d * fl * peso});
+        pos.push({lado: "short", preco: v.c * (1 + 1 / lev - 0.005), valor: d * (1 - fl) * peso});
+      }
+      aberto += d;
+    } else if (d < 0 && aberto > 0) {
+      const f = Math.max(0, 1 + d / aberto); for (const p of pos) p.valor *= f; aberto *= f;
+    }
+    // níveis já atingidos pelo preço: essas posições já foram liquidadas
+    pos = pos.filter(p => (p.lado === "long" ? p.preco < v.baixa : p.preco > v.alta));
+  }
+  const passo = precoAtual * 0.005, bins = new Map();
+  for (const p of pos) { if (p.preco < precoAtual * 0.75 || p.preco > precoAtual * 1.25) continue;
+    const k = Math.round(p.preco / passo); if (!bins.has(k)) bins.set(k, {preco: k * passo, long: 0, short: 0}); bins.get(k)[p.lado] += p.valor; }
+  const faixas = [...bins.values()].sort((a, b) => a.preco - b.preco);
+  const soma = (lado, a, b) => faixas.filter(f => f.preco >= a && f.preco <= b).reduce((s, f) => s + f[lado], 0);
+  const acima = soma("short", precoAtual, precoAtual * 1.05), abaixo = soma("long", precoAtual * 0.95, precoAtual);
+  const maior = (lado, filtro) => faixas.filter(filtro).sort((a, b) => b[lado] - a[lado])[0];
+  const imaAcima = maior("short", f => f.preco > precoAtual), imaAbaixo = maior("long", f => f.preco < precoAtual);
+  const razao = acima + abaixo > 0 ? acima / (acima + abaixo) : null;
+  let leitura = null, tom = "neutro";
+  if (razao != null && razao >= 0.65 && imaAcima) [leitura, tom] = [`muitas apostas na queda seriam liquidadas acima, perto de ${fmtPreco(imaAcima.preco)}: o preço pode ser puxado para cima`, "alta"];
+  else if (razao != null && razao <= 0.35 && imaAbaixo) [leitura, tom] = [`muitas apostas na alta seriam liquidadas abaixo, perto de ${fmtPreco(imaAbaixo.preco)}: o preço pode ser puxado para baixo`, "baixa"];
+  return {faixas, acima_5pct: acima, abaixo_5pct: abaixo, razao_acima: razao, ima_acima: imaAcima?.preco ?? null, ima_abaixo: imaAbaixo?.preco ?? null,
+    valor_ima_acima: imaAcima?.short ?? null, valor_ima_abaixo: imaAbaixo?.long ?? null, leitura, tom};
+}
+
+// ------------------------------------------------------------ STABLECOINS (dinheiro novo no mercado)
+function analisarStablecoins(peggedAssets) {
+  const alvo = (peggedAssets || []).filter(a => a.symbol === "USDT" || a.symbol === "USDC");
+  if (!alvo.length) return null;
+  const tot = k => alvo.reduce((s, a) => s + (+(a[k]?.peggedUSD) || 0), 0);
+  const agora = tot("circulating"), sem = tot("circulatingPrevWeek"), mes = tot("circulatingPrevMonth");
+  const v7 = sem ? (agora / sem - 1) * 100 : null, v30 = mes ? (agora / mes - 1) * 100 : null;
+  let leitura = "dinheiro em stablecoins estável", tom = "neutro";
+  if (v7 != null && v7 >= 0.3) [leitura, tom] = [`dinheiro novo entrando no mercado cripto (+${fmtUsd(agora - sem).replace("$", "US$ ")} em stablecoins na semana)`, "alta"];
+  else if (v7 != null && v7 <= -0.3) [leitura, tom] = [`dinheiro saindo do mercado cripto (${fmtUsd(agora - sem).replace("$", "US$ ")} em stablecoins na semana)`, "baixa"];
+  return {total: agora, var7_pct: v7, var30_pct: v30, var7_usd: agora - sem, var30_usd: agora - mes, leitura, tom,
+    detalhe: alvo.map(a => ({simbolo: a.symbol, total: +a.circulating?.peggedUSD || 0, var7_pct: a.circulatingPrevWeek?.peggedUSD ? (a.circulating.peggedUSD / a.circulatingPrevWeek.peggedUSD - 1) * 100 : null}))};
+}
+
 // ------------------------------------------------------------ SINAL DIRETO
 const ESTADOS = {
   compra: {texto: "ZONA DE COMPRA", tom: "compra_forte", ordem: 2},
@@ -671,6 +778,28 @@ function avaliar(m, medo, ehBtc) {
     const vc = ({alta_saudavel: 1, acumulacao: 1, queda_futuros: 0.6, neutro: 0.4, alta_fragil: 0.2, queda_real: 0, distribuicao: 0})[cd.tipo] ?? 0.4;
     const vv = ({alta_fragil: 0.8, distribuicao: 1, queda_real: 1, neutro: 0.3})[cd.tipo] ?? 0;
     C_(10, vc, vc >= 1 ? cd.leitura : null, "condutor_c"); V_(10, vv, vv >= 0.8 ? cd.leitura : null, "condutor_v");
+  }
+  // opções (só BTC e ETH): leitura contrária, como o medo e ganância
+  const op = m.opcoes;
+  if (op && op.tom) {
+    C_(5, ({medo: 0.8, neutro: 0.4, otimismo: 0.2})[op.tom], op.tom === "medo" ? op.leitura : null, "opcoes_c");
+    V_(5, ({otimismo: 0.8, neutro: 0.3, medo: 0.1})[op.tom], op.tom === "otimismo" ? op.leitura : null, "opcoes_v");
+    if (op.dias_vencimento != null && op.dias_vencimento <= 7 && op.max_dor_dist_pct != null && Math.abs(op.max_dor_dist_pct) >= 3) {
+      const t = `vencimento de opções em ${Math.max(1, Math.round(op.dias_vencimento))} dia(s) com "preço de máxima dor" em ${fmtPreco(op.max_dor)}`;
+      if (op.max_dor_dist_pct > 0) C_(5, 1, t, "maxdor_c"); else V_(5, 1, t, "maxdor_v");
+    }
+  }
+  // mapa de liquidações: o preço costuma ser atraído para onde há mais liquidações acumuladas
+  const ml = m.mapa_liq;
+  if (ml && ml.razao_acima != null) {
+    C_(10, lim01((ml.razao_acima - 0.35) / 0.3), ml.tom === "alta" ? ml.leitura : null, "liq_c");
+    V_(10, lim01((0.65 - ml.razao_acima) / 0.3), ml.tom === "baixa" ? ml.leitura : null, "liq_v");
+  }
+  // dinheiro novo entrando no mercado (stablecoins)
+  const st = m.stable;
+  if (st && st.var7_pct != null) {
+    C_(5, lim01(0.5 + st.var7_pct), st.tom === "alta" ? st.leitura : null, "stable_c");
+    V_(5, lim01(0.5 - st.var7_pct), st.tom === "baixa" ? st.leitura : null, "stable_v");
   }
   // absorção (comprador ou vendedor grande escondido)
   const ab = m.absorcao;
@@ -739,7 +868,7 @@ class Estabilizador {
 
 const API = {pyRound, br, fmtUsd, fmtPreco, media, Janela, EstadoMoeda, leituraTexto, rsi, converter, agrupar, soprSerie,
   mediaPonderadaMovel, custoCurtoPrazo, percentil, classificar, analisarTimeframe, diasExtremos, perfilVolume, regimeProvavel,
-  forcaVsBtc, analisarMoeda, preparar, calibrarPesos, spearman, Absorcao, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
+  forcaVsBtc, analisarMoeda, preparar, calibrarPesos, analisarOpcoes, mapaLiquidacoes, analisarStablecoins, spearman, Absorcao, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
 if (typeof module !== "undefined" && module.exports) module.exports = API;
 else raiz.Calc = API;
 })(typeof window !== "undefined" ? window : globalThis);
