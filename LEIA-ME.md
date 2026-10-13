@@ -29,10 +29,17 @@ Ela só precisa ficar hospedada em algum lugar para você abrir pelo link. Vamos
    - iPhone (Safari): botão **Compartilhar** → **Adicionar à Tela de Início**.
    Pronto: o radar vira um ícone como qualquer app.
 
+## Duas telas
+
+- **Tela inicial (simples)**: o clima do mercado e um cartão por moeda dizendo, em português do dia a
+  dia, se é hora de 🟢 comprar, 🟡 quase, ⚪ esperar, 🟠 vender uma parte ou 🔴 vender uma parte e evitar
+  compras — com o porquê, os preços de referência e um plano simples ("Ver plano").
+- **📊 Modo completo** (botão na barra de baixo): o painel com todos os indicadores, gráficos e o Laboratório.
+
 ## Primeiro uso
 
-- Abra a aba **⚙ Ajustes** para colocar quantidade e preço médio das suas moedas (opcional) e ligar
-  as **notificações**. Pode usar vírgula nos números.
+- Toque em **💼 Minhas moedas** para colocar quanto você tem e quanto pagou (opcional) e ligar os
+  **avisos**. Pode usar vírgula nos números.
 - Na primeira abertura o app baixa o histórico e calcula o Laboratório (alguns segundos). Depois
   isso fica guardado no celular e só é refeito a cada 6 horas.
 

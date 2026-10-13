@@ -2,903 +2,369 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Radar das Baleias</title>
 <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#080b12">
+<meta name="theme-color" content="#0b0f17">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Radar">
 <link rel="apple-touch-icon" href="./icone-180.png">
 <link rel="icon" href="./icone-192.png">
-<script src="./lightweight-charts.standalone.production.js"></script>
 <script src="./calculos.js"></script>
 <script src="./motor.js"></script>
 <style>
 :root{
-  --bg:#080b12; --card:#10151f; --card2:#151b27; --borda:#222a38; --texto:#e6e9ef; --fraco:#8a94a6;
-  --verde:#22c55e; --verde-f:rgba(34,197,94,.14); --verm:#f0525a; --verm-f:rgba(240,82,90,.14);
-  --laranja:#f5a524; --roxo:#8b7cf6; --azul:#3b82f6; --amarelo:#eab308; --cinza:#9ca3af;
+  --bg:#0b0f17; --card:#131a26; --card2:#1a2232; --borda:#253046; --texto:#eef1f6; --fraco:#93a0b5;
+  --verde:#22c55e; --verde-f:rgba(34,197,94,.15); --lima:#a3e635; --cinza:#9aa4b5;
+  --laranja:#fb923c; --verm:#f05252; --verm-f:rgba(240,82,90,.15); --amarelo:#facc15; --azul:#60a5fa;
 }
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--texto);font:14px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
-.wrap{max-width:1320px;margin:0 auto;padding:22px 20px 60px}
-h1{font-size:26px;margin:0 0 2px;letter-spacing:-.3px}
-.sub{color:var(--fraco);font-size:13px}
-.status{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0 4px;font-size:12.5px;color:var(--fraco)}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--cinza);vertical-align:1px}
-.dot.ok{background:var(--verde);box-shadow:0 0 6px var(--verde)} .dot.erro{background:var(--verm)} .dot.esp{background:var(--amarelo)}
-.abas{display:flex;gap:4px;border-bottom:1px solid var(--borda);margin:16px 0 18px;overflow-x:auto}
-.aba{background:none;border:0;color:var(--fraco);font:inherit;font-size:15px;padding:11px 15px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
-.aba:hover{color:var(--texto)} .aba.ativa{color:var(--texto);border-bottom-color:var(--texto);font-weight:600}
-.aba:first-child.ativa{color:var(--laranja);border-bottom-color:var(--laranja)}
-.card{background:var(--card);border:1px solid var(--borda);border-radius:14px;padding:18px 20px;margin-bottom:16px}
-.card h2{font-size:17px;margin:0 0 4px} .card h3{font-size:15px;margin:0 0 8px}
-.expl{color:var(--fraco);font-size:13px;margin:0 0 12px}
-table{width:100%;border-collapse:collapse}
-th{color:var(--fraco);font-weight:500;font-size:12.5px;text-align:right;padding:8px 10px;border-bottom:1px solid var(--borda);white-space:nowrap}
-td{padding:9px 10px;text-align:right;border-bottom:1px solid #1a2130;white-space:nowrap;font-variant-numeric:tabular-nums}
-th:first-child,td:first-child{text-align:left}
-tr.click{cursor:pointer} tr.click:hover td{background:var(--card2)} tr.sel td{background:#182032}
-.esq{text-align:left!important}
-.pos{color:var(--verde)} .neg{color:var(--verm)} .fr{color:var(--fraco)}
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
-.chip{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--borda);color:var(--texto);border-radius:999px;padding:6px 14px;cursor:pointer;font:inherit}
-.chip.ativo{background:#fff;color:#111;font-weight:600}
-.bola{width:10px;height:10px;border-radius:3px;display:inline-block}
-.pill{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:600}
-.pill.lucro,.pill.lucro_forte,.pill.lucro_extremo,.pill.alta{background:var(--verde-f);color:var(--verde)}
-.pill.prejuizo,.pill.prejuizo_extremo,.pill.baixa{background:var(--verm-f);color:var(--verm)}
-.pill.neutro{background:#232b3a;color:var(--cinza)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:16px}
-.moeda-topo{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
-.moeda-nome{font-size:19px;font-weight:700;display:flex;align-items:center;gap:8px}
-.preco-grande{font-size:20px;font-weight:600;text-align:right}
-.placar{font-size:12px;font-weight:700;padding:4px 10px;border-radius:8px}
-.barra-l{display:grid;grid-template-columns:62px 1fr 42px;align-items:center;gap:10px;margin:6px 0;font-size:13px}
-.trilho{background:#1c2331;height:12px;border-radius:6px;overflow:hidden}
-.trilho div{height:100%;border-radius:6px;transition:width .6s}
-.linha-info{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #1a2130;font-size:13px}
-ul.motivos{margin:8px 0 0;padding-left:18px;color:#c4cad6;font-size:13px} ul.motivos li{margin:3px 0}
-.tfs{display:flex;gap:6px;margin:10px 0}
-.tf{background:var(--card2);border:1px solid var(--borda);color:var(--texto);border-radius:999px;padding:5px 14px;cursor:pointer;font:inherit;font-size:13px}
-.tf.ativo{background:#fff;color:#111;font-weight:600}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:14px 0}
-.kpi{background:var(--card2);border:1px solid var(--borda);border-radius:10px;padding:10px 14px}
-.kpi .r{color:var(--fraco);font-size:12px} .kpi .v{font-size:21px;font-weight:700;margin-top:2px}
-.legenda{display:flex;flex-wrap:wrap;gap:16px;font-size:12.5px;color:var(--fraco);margin:8px 0}
-.legenda span{display:flex;align-items:center;gap:6px}
-.graf{position:relative}
-.dica{position:absolute;pointer-events:none;background:#0d121bf0;border:1px solid #2c3546;border-radius:8px;padding:8px 11px;font-size:12.5px;display:none;z-index:5;min-width:170px}
-.dica b{font-size:13.5px}
-.escada{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.degrau{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;margin:5px 0;background:var(--card2);font-variant-numeric:tabular-nums}
-.degrau.res{border-left:3px solid var(--verm)} .degrau.sup{border-left:3px solid var(--verde)} .degrau.atual{border-left:3px solid var(--laranja);background:#211a0c}
-.degrau .tag{font-size:11.5px;color:var(--fraco)}
-.perfil{display:flex;flex-direction:column;gap:1px;font-size:11px}
-.perfil .f{display:grid;grid-template-columns:78px 1fr;align-items:center;gap:8px;height:13px}
-.perfil .f .b{height:10px;border-radius:2px;background:#3a4558}
-.perfil .f.acima .b{background:rgba(240,82,90,.55)} .perfil .f.abaixo .b{background:rgba(34,197,94,.55)}
-.perfil .f.agora .b{background:var(--laranja)} .perfil .f.agora{color:var(--laranja);font-weight:700}
-.alerta{display:grid;grid-template-columns:110px 70px 1fr;gap:10px;padding:8px 4px;border-bottom:1px solid #1a2130;font-size:13px}
-.alerta.alta .t{color:#9be8b5} .alerta.baixa .t{color:#f7a5aa}
-.vazio{color:var(--fraco);padding:20px;text-align:center}
-.aviso{color:var(--fraco);font-size:12px;margin-top:24px;text-align:center}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--texto);font:16px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:16px 14px calc(96px + env(safe-area-inset-bottom))}
+header{display:flex;justify-content:space-between;align-items:center;margin:4px 0 14px}
+h1{font-size:22px;margin:0;letter-spacing:-.2px}
+.atualizado{font-size:12.5px;color:var(--fraco);display:flex;align-items:center;gap:6px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--cinza)}
+.dot.ok{background:var(--verde);box-shadow:0 0 8px var(--verde)} .dot.esp{background:var(--amarelo)} .dot.erro{background:var(--verm)}
+.card{background:var(--card);border:1px solid var(--borda);border-radius:18px;padding:16px;margin-bottom:14px}
+.clima{display:flex;gap:14px;align-items:center}
+.clima .emo{font-size:38px;line-height:1}
+.clima b{font-size:17px}
+.fr{color:var(--fraco)} .pos{color:var(--verde)} .neg{color:var(--verm)}
+.ajuda summary{cursor:pointer;color:var(--azul);font-size:14.5px;list-style:none}
+.ajuda summary::-webkit-details-marker{display:none}
+.ajuda ul{margin:10px 0 0;padding-left:0;list-style:none;font-size:14.5px}
+.ajuda li{margin:8px 0;display:flex;gap:10px}
+.moeda-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.nome{font-size:20px;font-weight:800;display:flex;align-items:center;gap:8px}
+.bola{width:12px;height:12px;border-radius:4px;display:inline-block}
+.preco{text-align:right;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.preco small{display:block;font-size:13px;font-weight:500}
+.veredito{margin:14px 0 6px;padding:14px;border-radius:14px;display:flex;gap:12px;align-items:center}
+.veredito .emo{font-size:30px;line-height:1}
+.veredito .txt{font-size:19px;font-weight:800;line-height:1.25}
+.veredito .sub{font-size:14px;font-weight:500;color:var(--texto);opacity:.85;margin-top:2px}
+.v-compra_forte{background:var(--verde-f);color:var(--verde)} .v-compra{background:rgba(163,230,53,.12);color:var(--lima)}
+.v-neutro{background:var(--card2);color:var(--cinza)} .v-venda{background:rgba(251,146,60,.13);color:var(--laranja)}
+.v-venda_forte{background:var(--verm-f);color:var(--verm)}
+.termo{margin:14px 2px 4px}
+.termo .barra{position:relative;height:12px;border-radius:8px;background:linear-gradient(90deg,var(--verm),var(--laranja) 30%,#5b6475 50%,var(--lima) 70%,var(--verde))}
+.termo .marca{position:absolute;top:-5px;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid var(--bg);transform:translateX(-50%);transition:left .8s;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.termo .rot{display:flex;justify-content:space-between;font-size:12px;color:var(--fraco);margin-top:6px}
+.porque{margin:12px 0 0;padding:0;list-style:none;font-size:15px}
+.porque li{display:flex;gap:8px;margin:7px 0}
+.porque li::before{content:"•";color:var(--fraco)}
+.linha{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--borda);font-size:15px}
+.linha:first-of-type{margin-top:12px}
+.linha b{font-variant-numeric:tabular-nums;text-align:right}
+.btn{display:block;width:100%;margin-top:12px;padding:12px;border-radius:12px;border:1px solid var(--borda);background:var(--card2);color:var(--texto);font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.btn.prim{background:var(--verde);border-color:var(--verde);color:#062b12}
+.plano{margin-top:12px;padding:14px;border-radius:14px;background:var(--card2);font-size:15px}
+.plano h4{margin:14px 0 6px;font-size:15px} .plano h4:first-child{margin-top:0}
+.passo{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--borda)}
+.passo:last-child{border-bottom:0}
+.passo b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.aviso{font-size:12.5px;color:var(--fraco);text-align:center;margin:18px 6px}
+.carregando{text-align:center;padding:40px 10px;color:var(--fraco)}
+.giro{width:34px;height:34px;border:3px solid var(--borda);border-top-color:var(--verde);border-radius:50%;margin:0 auto 14px;animation:g 1s linear infinite}
+@keyframes g{to{transform:rotate(360deg)}}
+nav{position:fixed;left:0;right:0;bottom:0;background:rgba(11,15,23,.96);border-top:1px solid var(--borda);display:flex;justify-content:space-around;padding:8px 6px calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(8px);z-index:10}
+nav button,nav a{flex:1;background:none;border:0;color:var(--fraco);font:inherit;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;cursor:pointer;padding:4px}
+nav .ic{font-size:21px;line-height:1.1}
+nav .ativo{color:var(--texto)}
 .oculto{display:none!important}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:50;overflow:auto;padding:12px}
-.qr{background:#fff;border-radius:12px;padding:10px;width:220px;height:220px;margin:10px auto}
-.qr svg{width:100%;height:100%}
-table.compacta th,table.compacta td{padding:8px 6px}
-.pill.alta.x{} .pill.bom{background:var(--verde-f);color:var(--verde)} .pill.fraco{background:#2a2410;color:var(--amarelo)} .pill.ruim{background:var(--verm-f);color:var(--verm)}
-.hoje{font-size:10.5px;font-weight:700;background:var(--laranja);color:#111;border-radius:4px;padding:1px 5px;margin-left:6px}
-.ativos{margin-top:10px;padding:10px 12px;background:var(--card2);border-radius:10px;font-size:13px}
-.ativos div{display:flex;justify-content:space-between;gap:8px;margin:4px 0}
-td.wrap{white-space:normal;min-width:220px}
-.sinais{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:12px}
-.sinal{border-radius:12px;padding:14px 16px;background:var(--card2);border:1px solid var(--borda);border-top-width:4px;cursor:pointer}
-.sinal:hover{border-color:#3a4558}
-.sinal .rotulo{font-size:17px;font-weight:800;letter-spacing:.2px;margin:6px 0 2px;line-height:1.2}
-.sinal.compra_forte{border-top-color:var(--verde);background:linear-gradient(180deg,rgba(34,197,94,.13),var(--card2) 55%)}
-.sinal.compra{border-top-color:#86efac}
-.sinal.neutro{border-top-color:#6b7280}
-.sinal.venda{border-top-color:#fca5a5}
-.sinal.venda_forte{border-top-color:var(--verm);background:linear-gradient(180deg,rgba(240,82,90,.13),var(--card2) 55%)}
-.sinal.compra_forte .rotulo,.sinal.compra .rotulo{color:var(--verde)} .sinal.venda_forte .rotulo,.sinal.venda .rotulo{color:var(--verm)} .sinal.neutro .rotulo{color:var(--cinza)}
-.notas{display:grid;grid-template-columns:52px 1fr 26px;gap:6px;align-items:center;font-size:12px;color:var(--fraco);margin:2px 0}
-.notas .trilho{height:8px}
-.sinal ul{margin:8px 0 0;padding-left:16px;font-size:12.5px;color:#c4cad6} .sinal li{margin:2px 0}
-.grid>*,.grid2>*{min-width:0}
-.degrau>div{min-width:0;overflow-wrap:anywhere}
-.grid2{display:grid;grid-template-columns:minmax(320px,1fr) minmax(460px,1.5fr);gap:16px}
-@media (max-width:1000px){.grid2{grid-template-columns:1fr}}
-@media (max-width:600px){
-  .wrap{padding:14px 12px 40px} h1{font-size:21px} .sub{display:none}
-  .status{font-size:11.5px;gap:3px 12px;margin-top:6px}
-  .card{padding:14px;border-radius:12px} .card h2{font-size:16px}
-  .abas{margin:10px 0 12px} .aba{font-size:14px;padding:9px 11px}
-  .kpis{grid-template-columns:1fr 1fr} .kpi .v{font-size:18px}
-  .sinais{grid-template-columns:1fr} .chips{gap:6px} .chip{padding:5px 11px}
-  #btn-celular{display:none!important}
-}
-@media (max-width:760px){.grid{grid-template-columns:1fr}.escada{grid-template-columns:1fr}.alerta{grid-template-columns:1fr}}
+.alerta{padding:12px 0;border-top:1px solid var(--borda);font-size:15px}
+.alerta:first-child{border-top:0}
+.alerta .h{font-size:12.5px;color:var(--fraco)}
+input.campo{width:100%;background:var(--bg);border:1px solid var(--borda);color:var(--texto);border-radius:10px;padding:11px;font:inherit;font-size:16px}
+label.rot{font-size:13px;color:var(--fraco);display:block;margin:10px 0 4px}
+.dupla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chave{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--borda)}
+.chave input{width:24px;height:24px}
+.badge{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--card2);color:var(--fraco);white-space:nowrap}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-    <h1>Radar das Baleias</h1>
-    <button id="btn-celular" class="tf oculto" onclick="abrirCelular()">📱 Abrir no celular</button>
-  </div>
-  <div id="modal-celular" class="modal oculto" onclick="if(event.target===this)this.classList.add('oculto')"><div class="card" style="max-width:620px;margin:6vh auto">
-    <div style="display:flex;justify-content:space-between;align-items:center"><h2>Abrir no celular</h2><button class="tf" onclick="document.getElementById('modal-celular').classList.add('oculto')">Fechar</button></div>
-    <div id="celular-conteudo" class="fr">Carregando...</div></div></div>
-  <div class="sub">Versão celular · roda direto no seu aparelho com dados públicos da Binance, Hyperliquid e outras fontes · atualiza enquanto o app está aberto</div>
-  <div class="status" id="status"></div>
+  <header>
+    <h1>🐋 Radar das Baleias</h1>
+    <div class="atualizado" id="status"><span class="dot"></span>carregando</div>
+  </header>
 
-  <nav class="abas" id="abas">
-    <button class="aba ativa" data-aba="conclusao">Conclusão</button>
-    <button class="aba" data-aba="plano">Plano</button>
-    <button class="aba" data-aba="smart">Smart money</button>
-    <button class="aba" data-aba="sopr">SOPR e custo</button>
-    <button class="aba" data-aba="suportes">Suportes</button>
-    <button class="aba" data-aba="mercado">Mercado global</button>
-    <button class="aba" data-aba="lab">Laboratório</button>
-    <button class="aba" data-aba="alertas">Alertas</button>
-    <button class="aba" data-aba="ajustes">⚙ Ajustes</button>
-  </nav>
-
-  <div class="chips oculto" id="chips"></div>
-
-  <!-- CONCLUSÃO -->
-  <section id="aba-conclusao">
-    <div class="card"><h2>Sinal direto</h2>
-      <p class="expl">Resumo de todos os indicadores em uma resposta por moeda. As barras mostram a nota de compra e a de venda (0 a 100). O sinal só muda depois de se confirmar por ~2 minutos. É uma regra automática, não uma recomendação de investimento — o Laboratório mede ao vivo se ele acerta.</p>
-      <div class="sinais" id="sinais"></div></div>
-    <div class="card" id="conc-geral"></div>
-    <div class="grid" id="conc-moedas"></div>
-  </section>
-
-  <!-- PLANO -->
-  <section id="aba-plano" class="oculto">
-    <div class="card"><h2 id="pl-tit">Plano</h2>
-      <p class="expl">Monta um plano de entrada escalonada, ponto de invalidação (stop) e alvos a partir dos suportes, resistências e da volatilidade da moeda, e confere se as condições estão a favor. É um rascunho para você decidir — não é recomendação de investimento.</p>
-      <div class="kpis" id="pl-entrada-usuario"></div></div>
-    <div class="grid2">
-      <div class="card"><h3>Checklist de confluência</h3><p class="expl">Quanto mais itens a favor, melhores as condições para comprar agora.</p><div id="pl-check"></div></div>
-      <div class="card"><h3>Plano de compra escalonada</h3><div id="pl-compra"></div></div>
-    </div>
-    <div class="card" id="pl-posicao"></div>
-  </section>
-
-  <!-- MERCADO GLOBAL -->
-  <section id="aba-mercado" class="oculto">
-    <div class="kpis" id="mg-kpis"></div>
-    <div class="grid">
-      <div class="card"><h3>Prêmio da Coinbase (BTC, últimas 300 h)</h3>
-        <p class="expl">Preço na Coinbase (dólar, onde operam os institucionais americanos) menos o preço na Binance. Acima de zero = americanos pagando mais caro para comprar.</p>
-        <div id="g-premio" style="height:220px"></div></div>
-      <div class="card"><h3>Fluxo dos ETFs nos EUA (milhões de US$/dia)</h3>
-        <p class="expl">Dinheiro entrando (verde) ou saindo (vermelho) dos ETFs à vista. <b>Só na versão do PC</b>: o site da Farside não permite leitura direto pelo navegador do celular.</p>
-        <div id="mg-etf"></div></div>
-      <div class="card"><h3>Medo e Ganância (60 dias)</h3>
-        <p class="expl">0 = medo extremo, 100 = ganância extrema. Extremos costumam aparecer perto de fundos (medo) e topos (ganância).</p>
-        <div id="mg-medo"></div></div>
-      <div class="card" style="grid-column:1/-1"><h3>Força das altcoins contra o BTC</h3>
-        <p class="expl">Variação da razão ALT/BTC. Positivo = a moeda subiu mais (ou caiu menos) que o BTC. Clique numa moeda para ver o gráfico (último ano, início = 100).</p>
-        <div class="grid2"><div style="overflow-x:auto"><table id="mg-forca" class="compacta"></table></div>
-        <div><div class="fr" id="forca-tit" style="font-size:12.5px"></div><div id="g-forca" style="height:220px"></div></div></div></div>
-    </div>
-    <div class="card"><h3>Situação das fontes</h3><div id="mg-fontes" class="fr"></div></div>
-  </section>
-
-  <!-- SMART MONEY -->
-  <section id="aba-smart" class="oculto">
-    <div class="card">
-      <h2>Rastros do dinheiro grande</h2>
-      <p class="expl" id="smart-expl"></p>
-      <div style="overflow-x:auto"><table id="tab-smart"></table></div>
-    </div>
-    <div class="grid">
-      <div class="card"><h3>Últimas ordens de baleia</h3><div id="baleias-lista"></div></div>
-      <div class="card" id="hl-card" style="grid-column:1/-1"></div>
-      <div class="card"><h3>Como ler</h3>
-        <ul class="motivos">
-          <li><b>Baleias</b>: ordens a mercado acima do valor configurado para a moeda (spot + futuros).</li>
-          <li><b>CVD</b>: compras agressivas menos vendas agressivas. Positivo = quem tem pressa está comprando.</li>
-          <li><b>Livro</b>: diferença entre ofertas de compra e de venda até ±2% do preço.</li>
-          <li><b>Funding</b>: alto = muita gente alavancada comprada (combustível para queda).</li>
-          <li><b>OI 1h</b>: subindo = dinheiro novo entrando; caindo = posições fechando (realização).</li>
-          <li><b>L/S top</b>: comprados/vendidos entre as maiores contas de futuros da Binance.</li>
+  <!-- INÍCIO -->
+  <section id="tela-inicio">
+    <div class="card" id="clima"></div>
+    <div class="card ajuda">
+      <details><summary>❓ Como ler esta tela</summary>
+        <ul>
+          <li><span>🟢</span><span><b>Bom momento para comprar</b>: quase tudo a favor e o preço está num bom ponto.</span></li>
+          <li><span>🟡</span><span><b>Quase bom para comprar</b>: inclinado para compra, mas ainda falta confirmação. Se comprar, compre pouco.</span></li>
+          <li><span>⚪</span><span><b>Esperar</b>: não há vantagem clara agora. Na dúvida, não faça nada.</span></li>
+          <li><span>🟠</span><span><b>Bom para vender uma parte</b>: sinais de cansaço na alta. Se tem lucro, pode garantir uma parte.</span></li>
+          <li><span>🔴</span><span><b>Hora de vender uma parte</b>: muitos sinais de topo. Evite comprar agora.</span></li>
+          <li><span>📍</span><span>O <b>termômetro</b> vai de "vender" (esquerda) a "comprar" (direita). Quanto mais na ponta, mais forte o sinal.</span></li>
+          <li><span>⚠️</span><span>São indicações automáticas, não garantia. Nunca invista dinheiro que você não pode perder.</span></li>
         </ul>
-      </div>
+      </details>
     </div>
-  </section>
-
-  <!-- SOPR -->
-  <section id="aba-sopr" class="oculto">
-    <div class="card">
-      <h2>Visão geral — curto prazo em lucro ou prejuízo?</h2>
-      <p class="expl">SOPR acima de 1 = quem comprou recentemente está vendendo com lucro; abaixo de 1 = vendendo com prejuízo (desespero). Clique numa linha para abrir o ativo.</p>
-      <div style="overflow-x:auto"><table id="tab-sopr"></table></div>
-    </div>
-    <div class="card" id="sopr-detalhe"></div>
-    <div class="grid" id="sopr-extremos"></div>
-  </section>
-
-  <!-- SUPORTES -->
-  <section id="aba-suportes" class="oculto">
-    <div class="grid">
-      <div class="card"><h2 id="sup-titulo">Suportes e resistências</h2>
-        <p class="expl">Zonas onde mais se negociou nos últimos ~90 dias (perfil de volume), maiores paredes do livro agora e o custo médio de curto prazo. Preço costuma reagir nessas regiões.</p>
-        <div id="sup-escada"></div></div>
-      <div class="card"><h2>Perfil de volume (90 dias)</h2>
-        <p class="expl">Cada barra é uma faixa de preço; quanto maior, mais dinheiro trocou de mãos ali.</p>
-        <div class="perfil" id="sup-perfil"></div></div>
-    </div>
-  </section>
-
-  <!-- LABORATÓRIO -->
-  <section id="aba-lab" class="oculto">
-    <div class="card"><h2>Laboratório — o que funcionou de verdade?</h2>
-      <p class="expl">Cada sinal foi testado em todo o histórico diário disponível na Binance, <b>sem olhar o futuro</b>: em cada dia, o sinal só usa dados até aquele dia. O retorno depois do sinal é comparado com o de um dia qualquer no mesmo período. "Chance de ser sorte" = em quantos % de sorteios de dias aleatórios o acaso foi tão bem quanto o sinal (quanto menor, melhor).</p>
-      <p class="expl"><b>Cuidado com o acaso:</b> são dezenas de combinações de sinal × moeda, então algumas parecem boas só por sorte. Por isso o critério de "Funcionou" é rigoroso (até 5% de chance de sorte, acerto acima da média e vantagem mantida em 90 dias). Confie mais em sinais que aparecem bem em <b>várias moedas</b> e use o resultado como contexto, não como garantia.</p>
-      <div class="fr" id="lab-meta"></div></div>
-    <div class="card"><h3>Resumo entre moedas (horizonte de 30 dias)</h3>
-      <p class="expl">Um sinal que funciona em várias moedas é mais confiável do que um que funciona em só uma.</p>
-      <div style="overflow-x:auto"><table id="lab-matriz" class="compacta"></table></div></div>
-    <div class="card"><h3 id="lab-tit-compra"></h3><p class="expl">Bom sinal de compra = preço subiu mais que num dia qualquer. Clique numa linha para ver cada caso no gráfico.</p>
-      <div style="overflow-x:auto"><table id="lab-compra" class="compacta"></table></div></div>
-    <div class="card"><h3 id="lab-tit-venda"></h3><p class="expl">Bom sinal de venda/realização = preço subiu menos (ou caiu mais) que num dia qualquer.</p>
-      <div style="overflow-x:auto"><table id="lab-venda" class="compacta"></table></div></div>
-    <div class="card"><h3 id="lab-tit-graf">Casos do sinal no gráfico</h3><p class="expl" id="lab-desc"></p>
-      <div id="g-lab" style="height:320px"></div>
-      <div style="overflow-x:auto;margin-top:12px"><table id="lab-eventos" class="compacta"></table></div></div>
-    <div class="card"><h3>Teste ao vivo do placar (baleias, fluxo, livro)</h3>
-      <p class="expl">Esses sinais não têm histórico gratuito, então o app guarda neste celular, a cada 15 min enquanto está aberto, o placar e o sinal de cada moeda, e mede aqui o que o preço fez depois. Quanto mais você usar, mais confiável fica.</p>
-      <div id="lab-vivo"></div></div>
-  </section>
-
-  <!-- AJUSTES -->
-  <section id="aba-ajustes" class="oculto">
-    <div class="card"><h2>Suas moedas</h2>
-      <p class="expl">Tudo fica salvo só neste celular. Quantidade e preço médio são opcionais (mostram seu lucro e o plano de realização). "Baleia a partir de" é o tamanho mínimo de uma ordem para contar como baleia.</p>
-      <div id="aj-form"></div></div>
-    <div class="card"><h2>Notificações e dados</h2><div id="aj-opcoes"></div></div>
-    <div class="card"><h2>Manutenção</h2><div id="aj-manut"></div></div>
+    <div id="moedas"><div class="carregando"><div class="giro"></div>Buscando os dados do mercado…<br><span style="font-size:13px">Na primeira vez pode levar até 30 segundos.</span></div></div>
+    <div class="aviso">Indicações automáticas a partir de dados públicos. Não é recomendação de investimento.</div>
   </section>
 
   <!-- ALERTAS -->
-  <section id="aba-alertas" class="oculto">
-    <div class="card"><h2>Alertas</h2><p class="expl">Os alertas são gerados enquanto o app está aberto e ficam guardados neste celular.</p><div id="lista-alertas"></div></div>
+  <section id="tela-alertas" class="oculto">
+    <div class="card"><h2 style="margin:0 0 4px;font-size:19px">🔔 Avisos</h2>
+      <p class="fr" style="margin:0 0 8px;font-size:14px">Mudanças importantes que aconteceram com o app aberto.</p>
+      <div id="lista-alertas"></div></div>
   </section>
 
-  <div class="aviso">Ferramenta de acompanhamento com dados apenas da Binance. Os sinais são estimativas e heurísticas, não previsões nem recomendação de investimento.</div>
+  <!-- AJUSTES -->
+  <section id="tela-ajustes" class="oculto">
+    <div class="card"><h2 style="margin:0 0 4px;font-size:19px">💼 Minhas moedas</h2>
+      <p class="fr" style="margin:0;font-size:14px">Coloque quanto você tem e quanto pagou em média (em dólar). É opcional e fica salvo só neste celular.</p>
+      <div id="aj-moedas"></div>
+      <button class="btn" onclick="addMoeda()">+ Adicionar outra moeda</button>
+      <button class="btn prim" onclick="salvar()">Salvar</button></div>
+    <div class="card"><h2 style="margin:0 0 4px;font-size:19px">⚙️ Preferências</h2><div id="aj-pref"></div></div>
+  </section>
 </div>
 
+<nav>
+  <button class="ativo" data-tela="inicio"><span class="ic">🏠</span>Início</button>
+  <button data-tela="alertas"><span class="ic">🔔</span>Avisos</button>
+  <button data-tela="ajustes"><span class="ic">💼</span>Minhas moedas</button>
+  <a href="./completo.html"><span class="ic">📊</span>Modo completo</a>
+</nav>
+
 <script>
-const CORES = {BTC:"#f7931a",ETH:"#8a92b2",PENDLE:"#5ad1c6",NEAR:"#ff6b9d",RENDER:"#ef4444"};
-const corMoeda = n => CORES[n] || "#8b7cf6";
-let ultimoLab = 0, labSinal = null, labDados = null, gL = null, sL = null;
-let E = null, abaAtual = "conclusao", sel = null, tf = "1d", ultimoSopr = 0;
-
-// ---------- formatação (padrão brasileiro) ----------
-const nf = (v, d) => v.toLocaleString("pt-BR", {minimumFractionDigits:d, maximumFractionDigits:d});
-function fp(v){ if(v==null||isNaN(v)) return "-"; return v>=1000?nf(v,0):v>=100?nf(v,2):v>=1?nf(v,3):nf(v,5); }
-function fu(v){ if(v==null) return "-"; const s=v<0?"-":"", a=Math.abs(v);
-  return s+"$"+(a>=1e9?nf(a/1e9,2)+"B":a>=1e6?nf(a/1e6,2)+"M":a>=1e3?nf(a/1e3,1)+"k":nf(a,0)); }
-const pc = (v,d=1) => v==null?"-":(v>0?"+":"")+nf(v,d)+"%";
-const cls = v => v==null?"":v>0?"pos":v<0?"neg":"";
-const dt = t => new Date(t*1000).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"});
-const hm = t => new Date(t*1000).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+// ===================================================================== utilidades
+const nf = (v, d) => Number(v).toLocaleString("pt-BR", {minimumFractionDigits: d, maximumFractionDigits: d});
+const dinheiro = v => v == null ? "-" : "US$ " + (v >= 1000 ? nf(v, 0) : v >= 1 ? nf(v, 2) : nf(v, 4));
+const usd = v => { if (v == null) return "-"; const a = Math.abs(v), s = v < 0 ? "-" : "";
+  return s + "US$ " + (a >= 1e9 ? nf(a/1e9, 1) + " bi" : a >= 1e6 ? nf(a/1e6, 1) + " mi" : a >= 1e3 ? nf(a/1e3, 1) + " mil" : nf(a, 0)); };
+const pct = (v, d = 1) => v == null ? "-" : (v > 0 ? "+" : "") + nf(v, d) + "%";
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const moeda = () => E.moedas.find(m => m.simbolo === sel) || E.moedas[0];
+const CORES = {BTC:"#f7931a",ETH:"#8a92b2",PENDLE:"#5ad1c6",NEAR:"#ff6b9d",RENDER:"#ef4444"};
+const NOMES = {BTC:"Bitcoin",ETH:"Ethereum",PENDLE:"Pendle",NEAR:"Near",RENDER:"Render"};
+let E = null, tela = "inicio", abertos = new Set();
 
-// ---------- celular ----------
-const NO_COMPUTADOR = ["127.0.0.1","localhost","::1","[::1]"].includes(location.hostname);
-if(NO_COMPUTADOR) document.getElementById("btn-celular").classList.remove("oculto");
-async function abrirCelular(){
-  document.getElementById("modal-celular").classList.remove("oculto");
-  const el = document.getElementById("celular-conteudo");
-  try{
-    const r = await (await fetch("/api/qr")).json();
-    if(!r.ativo){ el.innerHTML = 'O acesso pelo celular está desligado. No <code>config.toml</code>, em <code>[celular]</code>, coloque <code>ativado = true</code> e reinicie o radar.'; return; }
-    if(!r.itens.length){ el.innerHTML = "Não encontrei este computador na rede. Ele está conectado ao Wi-Fi ou cabo?"; return; }
-    el.innerHTML = r.itens.map(x => `<div style="text-align:center;margin:14px 0">
-      <b>${x.tipo==="tailscale"?"Fora de casa (Tailscale)":"Em casa (mesmo Wi-Fi)"}</b>
-      ${x.svg?`<div class="qr">${x.svg}</div>`:""}
-      <div style="font-size:13px;word-break:break-all"><code>${esc(x.url)}</code></div></div>`).join("") +
-      `<ul class="motivos"><li>Aponte a câmera do celular para o QR code e toque no link.</li>
-       <li>O link já contém sua chave de acesso: <b>não compartilhe</b>. Depois da primeira vez o celular lembra a chave.</li>
-       <li>No celular, use "Adicionar à tela inicial" para abrir como um app.</li>
-       <li>O computador precisa estar ligado com o radar aberto.</li></ul>`;
-  }catch(e){ el.textContent = "Erro ao gerar o QR code."; }
+// ===================================================================== linguagem simples
+const SIMPLES = {
+  compra:       {emo: "🟢", txt: "Bom momento para comprar"},
+  perto_compra: {emo: "🟡", txt: "Quase bom para comprar"},
+  aguardar:     {emo: "⚪", txt: "Esperar"},
+  perto_venda:  {emo: "🟠", txt: "Bom para vender uma parte"},
+  venda:        {emo: "🔴", txt: "Hora de vender uma parte"},
+};
+function subtitulo(s, temPosicao) {
+  return {
+    compra: "Se for comprar, compre em partes (toque em Ver plano).",
+    perto_compra: "Se quiser começar, compre só um pouco. Ou espere o preço chegar no valor indicado.",
+    aguardar: "Não há vantagem clara agora. Na dúvida, não faça nada.",
+    perto_venda: temPosicao ? "Se você está no lucro, pode garantir uma parte." : "Não é um bom momento para comprar.",
+    venda: temPosicao ? "Bom momento para garantir parte do lucro." : "Evite comprar agora: risco de queda.",
+  }[s];
+}
+function traduzir(t) {   // motivos técnicos -> português do dia a dia
+  const r = [
+    [/^SOPR em capitulação/, "Muita gente vendendo no prejuízo, o que costuma acontecer perto do fundo"],
+    [/^SOPR em realização/, "Muita gente vendendo com lucro, o que costuma acontecer perto do topo"],
+    [/^preço encostado no suporte (.+)$/, m => `O preço está perto de um "piso", onde costuma parar de cair (${m[1]})`],
+    [/^preço encostado na resistência (.+)$/, m => `O preço está perto de um "teto", onde costuma parar de subir (${m[1]})`],
+    [/^regime com viés de alta/, "A tendência dos últimos dias é de alta"],
+    [/^regime com viés de baixa/, "A tendência dos últimos dias é de queda"],
+    [/^BTC favorável/, "O Bitcoin está bem, o que ajuda as outras moedas"],
+    [/^BTC em baixa: rebaixado/, "Seria um bom momento, mas o Bitcoin está caindo e costuma puxar as outras moedas junto"],
+    [/^BTC em baixa/, "O Bitcoin está caindo e costuma puxar as outras moedas junto"],
+    [/^ganhando força contra o BTC/, "Está subindo mais que o Bitcoin"],
+    [/^fluxo comprador/, "Agora há mais gente comprando do que vendendo"],
+    [/^fluxo vendedor/, "Agora há mais gente vendendo do que comprando"],
+    [/^baleias da Hyperliquid (\d+)% compradas/, m => `Os grandes investidores estão apostando na alta (${m[1]}%)`],
+    [/^baleias da Hyperliquid (\d+)% vendidas/, m => `Os grandes investidores estão apostando na queda (${m[1]}%)`],
+    [/^funding alto/, "Muita gente apostando na alta com dinheiro emprestado, o que aumenta o risco de queda brusca"],
+    [/^RSI 1h esticado/, "Subiu rápido demais nas últimas horas"],
+    [/^histórico: /, "Situações parecidas deram certo no passado"],
+    [/^medo no mercado/, "O mercado está com medo, o que costuma ser bom para quem compra com calma"],
+    [/^ganância no mercado/, "O mercado está eufórico: hora de cautela"],
+    [/^compra e venda equilibradas/, "Não há sinais fortes nem para comprar nem para vender"],
+    [/^leve viés de compra/, "Leve inclinação para compra, mas ainda sem confirmação"],
+    [/^leve viés de venda/, "Leve inclinação para venda, mas ainda sem confirmação"],
+    [/^momento bom, mas o preço/, "Os sinais são bons, mas o preço ainda não está num bom ponto de entrada"],
+    [/^momento fraco, mas o preço/, "Os sinais estão fracos, mas o preço ainda não está num ponto de venda"],
+  ];
+  for (const [re, f] of r) { const m = t.match(re); if (m) return typeof f === "function" ? f(m) : f; }
+  return t;
+}
+function clima() {
+  const md = E.externo?.medo || {}, v = md.valor, tit = E.conclusao?.titulo || "";
+  const dir = /comprador/.test(tit) ? ["📈", "Mercado mais para alta"] : /vendedor/.test(tit) ? ["📉", "Mercado mais para queda"] : ["↔️", "Mercado sem direção definida"];
+  let humor = "";
+  if (v != null) humor = v <= 25 ? `O clima está de <b>muito medo</b> (${v}/100). Costuma ser época de oportunidade para quem compra com calma.`
+    : v <= 45 ? `O clima está de <b>medo</b> (${v}/100).` : v <= 55 ? `O clima está <b>neutro</b> (${v}/100).`
+    : v <= 75 ? `O clima está de <b>otimismo</b> (${v}/100).` : `O clima está de <b>euforia</b> (${v}/100). Hora de cautela com compras.`;
+  return `<div class="clima"><div class="emo">${dir[0]}</div><div><b>${dir[1]}</b><div class="fr" style="font-size:14.5px">${humor || "Analisando o mercado…"}</div></div></div>`;
 }
 
-// ---------- abas e seletor ----------
-document.getElementById("abas").onclick = ev => {
-  const b = ev.target.closest(".aba"); if(!b) return;
-  document.querySelectorAll(".aba").forEach(x => x.classList.toggle("ativa", x===b));
-  abaAtual = b.dataset.aba;
-  ["conclusao","plano","smart","sopr","suportes","mercado","lab","alertas","ajustes"].forEach(a =>
-    document.getElementById("aba-"+a).classList.toggle("oculto", a!==abaAtual));
-  document.getElementById("chips").classList.toggle("oculto", !["sopr","suportes","smart","lab","plano","mercado"].includes(abaAtual));
-  render(); if(abaAtual==="sopr") carregarGrafico(); if(abaAtual==="suportes") carregarPerfil(); if(abaAtual==="lab") carregarLab(); if(abaAtual==="mercado") carregarMercado();
-};
-function selecionar(s){ sel = s; labSinal = null; render(); if(abaAtual==="sopr") carregarGrafico(); if(abaAtual==="suportes") carregarPerfil(); if(abaAtual==="lab") carregarLab(); if(abaAtual==="mercado") carregarMercado(); }
-
-// ---------- dados ----------
-async function atualizar(){
-  try{
-    E = await (await fetch("/api/estado")).json();
-    if(!sel && E.moedas.length) sel = E.moedas[0].simbolo;
-    render();
-    if(E.sopr_atualizado !== ultimoSopr){ ultimoSopr = E.sopr_atualizado;
-      if(abaAtual==="sopr") carregarGrafico(); if(abaAtual==="suportes") carregarPerfil(); }
-    if(E.lab_atualizado !== ultimoLab){ ultimoLab = E.lab_atualizado; if(abaAtual==="lab") carregarLab(); }
-  }catch(e){
-    document.getElementById("status").innerHTML = '<span><i class="dot erro"></i>Sem conexão com o radar. A janela do programa está aberta?</span>';
+// ===================================================================== plano simples (mesma lógica da aba Plano)
+function niveis(m) {
+  const P = m.preco, s = m.sopr || {}, atr = s.atr14 || P * 0.03;
+  let sup = (m.suportes.suportes || []).map(x => x.preco), res = (m.suportes.resistencias || []).map(x => x.preco);
+  if (s.custo_curto_prazo) (s.custo_curto_prazo < P ? sup : res).push(s.custo_curto_prazo);
+  if (m.parede_compra) sup.push(m.parede_compra[0]);
+  if (s.max90) res.push(s.max90);
+  const esp = Math.max(atr * 0.75, P * 0.015);
+  const limpa = (l, ok) => { l = l.filter(ok).sort((a, b) => Math.abs(a - P) - Math.abs(b - P)); const o = [];
+    l.forEach(x => { if (!o.some(y => Math.abs(y - x) < esp)) o.push(x); }); return o; };
+  sup = limpa(sup, x => x < P - esp * 0.66 && x > P * 0.6); res = limpa(res, x => x > P + esp && x < P * 2);
+  while (sup.length < 2) sup.push((sup.length ? sup[sup.length - 1] : P) - atr * 1.5);
+  while (res.length < 3) res.push((res.length ? res[res.length - 1] : P) + atr * 2);
+  const entradas = [P, sup[0], sup[1]], stop = Math.max(Math.min(...entradas) - atr, P * 0.05);
+  return {entradas, stop, alvos: res.slice(0, 3)};
+}
+function planoHTML(m) {
+  const P = m.preco, {entradas, stop, alvos} = niveis(m), x = m.sinal;
+  const tem = m.quantidade > 0 && m.preco_medio > 0;
+  let h = "";
+  if (x && ["compra", "perto_compra", "aguardar"].includes(x.estado)) {
+    h += `<h4>🛒 Se for comprar, divida em 3 partes</h4>
+      <div class="passo"><span>1ª parte (30%) — agora</span><b>${dinheiro(entradas[0])}</b></div>
+      <div class="passo"><span>2ª parte (30%) — se cair até</span><b>${dinheiro(entradas[1])}</b></div>
+      <div class="passo"><span>3ª parte (40%) — se cair até</span><b>${dinheiro(entradas[2])}</b></div>
+      <p class="fr" style="font-size:13.5px;margin:6px 0 0">Comprar em partes protege você caso o preço continue caindo depois da primeira compra.</p>
+      <h4>🛑 Quando a ideia deu errada</h4>
+      <p style="margin:0">Se o preço cair abaixo de <b>${dinheiro(stop)}</b> (${pct((stop / P - 1) * 100)}), os sinais de compra deixam de valer. Considere vender para não perder mais.</p>`;
   }
+  h += `<h4>💰 Onde vender com lucro (por partes)</h4>` + alvos.map((a, i) =>
+    `<div class="passo"><span>${i + 1}º alvo${tem ? " — vender 1/4" : ""}</span><b>${dinheiro(a)} <span class="pos" style="font-weight:500">(${pct((a / P - 1) * 100, 0)})</span></b></div>`).join("");
+  if (tem && P > m.preco_medio * 1.03) h += `<p class="fr" style="font-size:13.5px;margin:6px 0 0">Você está no lucro. Uma estratégia comum é vender uma parte em cada alvo e manter o resto.</p>`;
+  // o que os grandes estão fazendo
+  const grandes = [];
+  const bc = m.baleias_compra || 0, bv = m.baleias_venda || 0;
+  if (bc + bv > 0) grandes.push(`Na última hora, as grandes ordens na Binance foram mais de <b>${bc > bv * 1.3 ? "compra" : bv > bc * 1.3 ? "venda" : "compra e venda equilibradas"}</b>${bc > bv * 1.3 || bv > bc * 1.3 ? ` (${usd(Math.max(bc, bv))})` : ""}.`);
+  const hl = m.hl?.baleias;
+  if (hl?.proporcao_long != null) grandes.push(`Na Hyperliquid, <b>${nf(hl.proporcao_long * 100, 0)}%</b> do dinheiro dos maiores investidores está apostando na alta.`);
+  if (grandes.length) h += `<h4>🐋 O que os grandes investidores estão fazendo</h4><p style="margin:0">${grandes.join(" ")}</p>`;
+  // histórico
+  const at = (m.lab?.ativos || []).filter(a => a.tom === "bom" || a.tom === "fraco");
+  if (at.length) { const a = at[0];
+    h += `<h4>📚 Já aconteceu antes?</h4><p style="margin:0">Uma situação parecida ("${esc(a.nome)}") apareceu <b>${a.casos} vezes</b> no passado. Em ${nf(a.acerto30 || 0, 0)}% delas o preço ${a.tipo === "compra" ? "subiu" : "caiu"} no mês seguinte.</p>`; }
+  return `<div class="plano">${h}</div>`;
+}
+
+// ===================================================================== cartões
+function cartao(m) {
+  const cor = CORES[m.nome] || "#8b7cf6", x = m.sinal;
+  const topo = `<div class="moeda-topo"><div><div class="nome"><i class="bola" style="background:${cor}"></i>${m.nome}</div>
+      <div class="fr" style="font-size:13px">${NOMES[m.nome] || ""}</div></div>
+    <div class="preco">${dinheiro(m.preco)}<small class="${m.variacao_24h >= 0 ? "pos" : "neg"}">${m.variacao_24h >= 0 ? "▲" : "▼"} ${pct(m.variacao_24h)} hoje</small></div></div>`;
+  if (!x) return `<div class="card">${topo}<div class="veredito v-neutro"><div class="emo">⏳</div><div><div class="txt">Analisando…</div><div class="sub">Calculando os indicadores desta moeda.</div></div></div></div>`;
+  const S = SIMPLES[x.estado], tem = m.quantidade > 0 && m.preco_medio > 0;
+  const pos = Math.max(3, Math.min(97, 50 + (x.nota_compra - x.nota_venda) / 2));
+  const motivos = x.motivos.map(traduzir).slice(0, 3);
+  const ref = x.referencia ? (x.referencia.tipo === "zona de compra"
+      ? `<div class="linha"><span>💵 Preço bom para comprar</span><b>até ${dinheiro(x.referencia.preco)}</b></div>`
+      : `<div class="linha"><span>💰 Preço bom para vender</span><b>a partir de ${dinheiro(x.referencia.preco)}</b></div>`) : "";
+  const minha = tem ? `<div class="linha"><span>💼 Sua posição</span><b class="${m.pnl >= 0 ? "pos" : "neg"}">${m.pnl >= 0 ? "ganhando" : "perdendo"} ${pct(Math.abs(m.pnl_pct)).replace("+", "")} (${usd(m.pnl)})</b></div>` : "";
+  const mudando = x.mudando_para ? `<div class="fr" style="font-size:13px;margin-top:6px">⏳ Pode mudar em instantes (confirmando nova leitura)…</div>` : "";
+  const aberto = abertos.has(m.simbolo);
+  return `<div class="card">${topo}
+    <div class="veredito v-${x.tom}"><div class="emo">${S.emo}</div><div><div class="txt">${S.txt}</div><div class="sub">${subtitulo(x.estado, tem)}</div></div></div>
+    ${mudando}
+    <div class="termo"><div class="barra"><div class="marca" style="left:${pos}%"></div></div><div class="rot"><span>vender</span><span>esperar</span><span>comprar</span></div></div>
+    <ul class="porque">${motivos.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
+    ${ref}${minha}
+    <button class="btn" onclick="alternar('${m.simbolo}')">${aberto ? "Fechar plano ▴" : "Ver plano ▾"}</button>
+    ${aberto ? planoHTML(m) : ""}</div>`;
+}
+function alternar(s) { abertos.has(s) ? abertos.delete(s) : abertos.add(s); render(); }
+
+// ===================================================================== avisos (versão simples)
+function avisosHTML() {
+  const L = (E.alertas || []).filter(a => a.tipo.startsWith("sinal_") || a.tipo === "sopr" || ((a.tipo === "baleia_compra" || a.tipo === "baleia_venda") && a.importante)).slice(0, 40);
+  if (!L.length) return `<div class="fr" style="padding:10px 0">Nenhum aviso ainda. Eles aparecem quando o sinal de alguma moeda muda.</div>`;
+  return L.map(a => {
+    let t = a.texto;
+    const est = a.tipo.startsWith("sinal_") ? a.tipo.slice(6) : null;
+    if (est && SIMPLES[est]) t = `${SIMPLES[est].emo} <b>${a.moeda}</b>: ${SIMPLES[est].txt.toLowerCase()}`;
+    else if (a.tipo === "baleia_compra") t = `🐋 <b>${a.moeda}</b>: uma baleia fez uma compra grande (${esc(a.texto.match(/\$[\d.,]+[kMB]?/)?.[0] || "")})`;
+    else if (a.tipo === "baleia_venda") t = `🐋 <b>${a.moeda}</b>: uma baleia fez uma venda grande (${esc(a.texto.match(/\$[\d.,]+[kMB]?/)?.[0] || "")})`;
+    else if (a.tipo === "sopr") t = `📊 <b>${a.moeda}</b>: ${/lucro extremo/i.test(a.texto) ? "muita gente vendendo com lucro (sinal de topo)" : "muita gente vendendo no prejuízo (sinal de fundo)"}`;
+    return `<div class="alerta"><div class="h">${esc(a.hora)}</div>${t}</div>`;
+  }).join("");
+}
+
+// ===================================================================== minhas moedas (ajustes)
+function telaAjustes() {
+  const a = Radar.ajustes(), num = v => String(v || 0).replace(".", ",");
+  document.getElementById("aj-moedas").innerHTML = a.moedas.map(m => `<div class="aj-moeda" style="border-top:1px solid var(--borda);margin-top:14px;padding-top:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:17px">${esc(m.simbolo.replace("USDT", ""))}</b>
+        <button class="badge" style="border:0;cursor:pointer" onclick="this.closest('.aj-moeda').remove()">remover</button></div>
+      <input type="hidden" class="aj-s" value="${esc(m.simbolo)}"><input type="hidden" class="aj-b" value="${m.trade_grande_usd}">
+      <div class="dupla"><div><label class="rot">Quantidade que tenho</label><input class="campo aj-q" inputmode="decimal" value="${num(m.quantidade)}"></div>
+        <div><label class="rot">Paguei em média (US$)</label><input class="campo aj-p" inputmode="decimal" value="${num(m.preco_medio)}"></div></div></div>`).join("");
+  document.getElementById("aj-pref").innerHTML = `
+    <div class="chave"><span>🔔 Avisos no celular<br><span class="fr" style="font-size:13px">Avisa quando o sinal de uma moeda mudar (com o app aberto ou usado há pouco).</span></span>
+      <button class="badge" style="border:0;cursor:pointer;font-size:14px;padding:8px 12px" onclick="ativarNotif(this)">${a.notificacoes && window.Notification && Notification.permission === "granted" ? "Ligados ✔" : "Ativar"}</button></div>
+    <label class="chave"><span>📶 Economizar internet<br><span class="fr" style="font-size:13px">Desliga o acompanhamento das ordens em tempo real. Bom para usar no 4G.</span></span>
+      <input type="checkbox" id="aj-eco" ${a.fluxo_ao_vivo ? "" : "checked"}></label>
+    <label class="chave"><span>🔊 Som nos avisos</span><input type="checkbox" id="aj-som" ${a.som ? "checked" : ""}></label>
+    <button class="btn prim" onclick="salvar()">Salvar</button>`;
+}
+function addMoeda() {
+  const s = (prompt("Qual moeda? Digite a sigla (ex.: SOL, XRP, ADA)") || "").trim().toUpperCase().replace(/USDT$/, "");
+  if (!/^[A-Z0-9]{2,12}$/.test(s)) return;
+  const d = document.createElement("div");
+  d.className = "aj-moeda"; d.style.cssText = "border-top:1px solid var(--borda);margin-top:14px;padding-top:6px";
+  d.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:17px">${s}</b>
+      <button class="badge" style="border:0;cursor:pointer" onclick="this.closest('.aj-moeda').remove()">remover</button></div>
+    <input type="hidden" class="aj-s" value="${s}USDT"><input type="hidden" class="aj-b" value="50000">
+    <div class="dupla"><div><label class="rot">Quantidade que tenho</label><input class="campo aj-q" inputmode="decimal" value="0"></div>
+      <div><label class="rot">Paguei em média (US$)</label><input class="campo aj-p" inputmode="decimal" value="0"></div></div>`;
+  document.getElementById("aj-moedas").appendChild(d);
+}
+// aceita "0,05", "0.05", "62.713,50" e "62713"
+const numero = v => { let t = String(v).trim().replace(/\s/g, ""); if (t.includes(",")) t = t.replace(/\./g, "").replace(",", "."); return Number(t) || 0; };
+function salvar() {
+  const moedas = [...document.querySelectorAll(".aj-moeda")].map(d => ({simbolo: d.querySelector(".aj-s").value,
+    quantidade: numero(d.querySelector(".aj-q").value), preco_medio: numero(d.querySelector(".aj-p").value), trade_grande_usd: Number(d.querySelector(".aj-b").value) || 50000}));
+  if (!moedas.length) { alert("Deixe pelo menos uma moeda."); return; }
+  const eco = document.getElementById("aj-eco"), som = document.getElementById("aj-som");
+  Radar.salvar({moedas, fluxo_ao_vivo: eco ? !eco.checked : true, som: som ? som.checked : true});
+}
+async function ativarNotif(b) { const r = await Radar.pedirNotificacao();
+  b.textContent = r === "granted" ? "Ligados ✔" : r === "sem_suporte" ? "Sem suporte" : "Bloqueados"; }
+
+// ===================================================================== navegação e atualização
+document.querySelector("nav").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (!b) return;
+  tela = b.dataset.tela;
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("ativo", x === b));
+  ["inicio", "alertas", "ajustes"].forEach(t => document.getElementById("tela-" + t).classList.toggle("oculto", t !== tela));
+  if (tela === "ajustes") telaAjustes();
+  window.scrollTo(0, 0); render();
+});
+function statusHTML() {
+  const st = E.status || {}, v = Object.values(st);
+  const erro = v.some(x => String(x).startsWith("erro")), esperando = v.some(x => ["conectando", "aguardando", "calculando", "reconectando"].includes(x));
+  const [cl, txt] = erro ? ["erro", "algumas informações falharam"] : esperando ? ["esp", "atualizando…"] : ["ok", "ao vivo"];
+  return `<span class="dot ${cl}"></span>${txt}`;
+}
+function render() {
+  if (!E) return;
+  document.getElementById("status").innerHTML = statusHTML();
+  if (tela === "inicio") {
+    document.getElementById("clima").innerHTML = clima();
+    if (E.moedas.some(m => m.sinal) || E.moedas.every(m => m.preco)) document.getElementById("moedas").innerHTML = E.moedas.map(cartao).join("");
+  }
+  if (tela === "alertas") document.getElementById("lista-alertas").innerHTML = avisosHTML();
+}
+async function atualizar() {
+  try { E = await (await fetch("/api/estado")).json(); render(); } catch (e) {}
 }
 setInterval(atualizar, 3000); atualizar();
-
-function render(){
-  if(!E) return;
-  renderStatus(); renderChips();
-  if(abaAtual==="conclusao") renderConclusao();
-  if(abaAtual==="smart") renderSmart();
-  if(abaAtual==="sopr") renderSopr();
-  if(abaAtual==="suportes") renderSuportes();
-  if(abaAtual==="alertas") renderAlertas();
-  if(abaAtual==="lab") renderLabMatriz();
-  if(abaAtual==="ajustes" && !document.getElementById("aj-form").dataset.ok) renderAjustes();
-  if(abaAtual==="plano") renderPlano();
-  if(abaAtual==="mercado"){ renderMercado(); if((!gC && E.externo?.coinbase?.BTC) || (!gF && E.moedas.some(m => m.forca_btc))) carregarMercado(); }
-}
-
-function renderStatus(){
-  const s = E.status, d = v => v==="ok"?"ok":(v||"").startsWith("erro")?"erro":"esp";
-  const txt = v => v==="ok"?"":" — "+esc(v);
-  let sopr = "SOPR e velas: aguardando";
-  if(E.sopr_atualizado){ const min = Math.max(0, Math.round((E.sopr_proximo - E.agora)/60));
-    sopr = `SOPR e velas atualizados ${hm(E.sopr_atualizado)} · próxima em ${min} min`; }
-  document.getElementById("status").innerHTML =
-    `<span><i class="dot ${d(s.spot)}"></i>preço e baleias ao vivo (spot)${txt(s.spot)}</span>`+
-    `<span><i class="dot ${d(s.futuros)}"></i>futuros e liquidações${txt(s.futuros)}</span>`+
-    `<span><i class="dot ${d(s.indicadores)}"></i>livro, funding e OI${txt(s.indicadores)}</span>`+
-    `<span><i class="dot ${d(s.sopr)}"></i>${sopr}${s.sopr!=="ok"&&s.sopr!=="aguardando"?txt(s.sopr):""}</span>`+
-    `<span><i class="dot ${d(s.externo)}"></i>fontes externas${s.externo==="ok"?"":txt(s.externo)}</span>`+
-    `<span><i class="dot ${d(s.lab)}"></i>laboratório${s.lab==="ok"&&E.lab_atualizado?" atualizado "+hm(E.lab_atualizado):s.lab==="calculando"?" calculando...":txt(s.lab)}</span>`;
-}
-
-function renderChips(){
-  document.getElementById("chips").innerHTML = E.moedas.map(m =>
-    `<button class="chip ${m.simbolo===sel?"ativo":""}" onclick="selecionar('${m.simbolo}')">
-       <i class="bola" style="background:${corMoeda(m.nome)}"></i>${m.nome}</button>`).join("");
-}
-
-function corPlacar(p){ return p>=15?"background:var(--verde-f);color:var(--verde)":p<=-15?"background:var(--verm-f);color:var(--verm)":"background:#2a2410;color:var(--amarelo)"; }
-
-// ---------- CONCLUSÃO ----------
-function cartaoSinal(m){
-  const x = m.sinal;
-  if(!x) return `<div class="sinal neutro"><div class="moeda-nome" style="font-size:16px"><i class="bola" style="background:${corMoeda(m.nome)}"></i>${m.nome}</div><div class="rotulo fr" style="font-size:14px">calculando...</div><div class="fr" style="font-size:12px">aguardando SOPR e indicadores</div></div>`;
-  return `<div class="sinal ${x.tom}" onclick="sel='${m.simbolo}';document.querySelector('[data-aba=plano]').click()" title="Clique para abrir o Plano de ${m.nome}">
-    <div style="display:flex;justify-content:space-between;align-items:center"><div class="moeda-nome" style="font-size:16px"><i class="bola" style="background:${corMoeda(m.nome)}"></i>${m.nome}</div><span style="font-weight:600">${fp(m.preco)}</span></div>
-    <div class="rotulo">${esc(x.texto)}</div>
-    <div class="fr" style="font-size:12px;margin-bottom:6px">confiança ${esc(x.confianca)}${x.mudando_para?` · <span style="color:var(--amarelo)">mudando para ${esc(x.mudando_para)}...</span>`:""}</div>
-    <div class="notas"><span>Compra</span><div class="trilho"><div style="width:${x.nota_compra}%;background:var(--verde)"></div></div><b>${x.nota_compra}</b></div>
-    <div class="notas"><span>Venda</span><div class="trilho"><div style="width:${x.nota_venda}%;background:var(--verm)"></div></div><b>${x.nota_venda}</b></div>
-    <div style="font-size:13px;margin-top:8px">${esc(x.acao)}</div>
-    ${x.referencia?`<div class="fr" style="font-size:12px;margin-top:4px">${esc(x.referencia.tipo)}: <b style="color:var(--texto)">${fp(x.referencia.preco)}</b> (${pc((x.referencia.preco/m.preco-1)*100)})</div>`:""}
-    <ul>${x.motivos.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></div>`;
-}
-function renderConclusao(){
-  document.getElementById("sinais").innerHTML = E.moedas.map(cartaoSinal).join("");
-  const c = E.conclusao;
-  document.getElementById("conc-geral").innerHTML = `<h2>${esc(c.titulo)}</h2>
-    <p class="expl">Leitura somando fluxo das baleias, posicionamento em futuros, livro de ofertas, SOPR, custo médio e tendência.</p>
-    ${c.texto.length ? `<ul class="motivos">${c.texto.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>` : '<div class="fr">Coletando dados — o SOPR e o regime aparecem após o primeiro carregamento das velas (alguns segundos).</div>'}`;
-  document.getElementById("conc-moedas").innerHTML = E.moedas.map(m => {
-    const r = m.regime || {}, s = m.sopr || {}, sup = (m.suportes.suportes||[])[0], res = (m.suportes.resistencias||[]).slice(-1)[0];
-    const barra = (nome, v, cor) => `<div class="barra-l"><span>${nome}</span><div class="trilho"><div style="width:${v||0}%;background:${cor}"></div></div><b style="text-align:right">${v!=null?v+"%":"-"}</b></div>`;
-    return `<div class="card">
-      <div class="moeda-topo">
-        <div><div class="moeda-nome"><i class="bola" style="background:${corMoeda(m.nome)}"></i>${m.nome}
-          <span class="placar" style="${corPlacar(m.placar)}">${m.placar>0?"+":""}${m.placar} · ${esc(m.leitura)}</span></div></div>
-        <div><div class="preco-grande">${fp(m.preco)}</div><div class="${cls(m.variacao_24h)}" style="text-align:right;font-size:13px">${pc(m.variacao_24h,2)} 24h</div></div>
-      </div>
-      <div class="fr" style="font-size:12.5px;margin-bottom:4px">Regime provável</div>
-      ${barra("Alta", r.alta, "var(--azul)")}${barra("Lateral", r.lateral, "#9aa3b2")}${barra("Baixa", r.baixa, "var(--verm)")}
-      <div class="linha-info" style="margin-top:10px"><span class="fr">SOPR 7d</span><span>${s.sopr7!=null?nf(s.sopr7,3):"-"} <span class="pill ${s.tom||"neutro"}">${esc(s.comportamento||"-")}</span></span></div>
-      <div class="linha-info"><span class="fr">Custo médio curto prazo</span><span>${fp(s.custo_curto_prazo)} <span class="${cls(s.preco_vs_custo_pct)}">(${pc(s.preco_vs_custo_pct)})</span></span></div>
-      <div class="linha-info"><span class="fr">Suporte / resistência mais próximos</span><span><span class="pos">${sup?fp(sup.preco):"-"}</span> / <span class="neg">${res?fp(res.preco):"-"}</span></span></div>
-      ${m.pnl!=null?`<div class="linha-info"><span class="fr">Sua posição</span><span class="${cls(m.pnl)}">${fu(m.pnl)} (${pc(m.pnl_pct)})</span></div>`:""}
-      ${m.forca_btc?`<div class="linha-info"><span class="fr">Força vs BTC (30d)</span><span class="${cls(m.forca_btc.var30_pct)}">${pc(m.forca_btc.var30_pct)} · ${esc(m.forca_btc.texto)}</span></div>`:""}
-      ${m.filtro_btc?`<div class="linha-info"><span class="fr">Filtro do BTC</span><span class="${m.filtro_btc.ok?"pos":"neg"}">${m.filtro_btc.ok?"✓ favorável":"✗ BTC em baixa"}</span></div>`:""}
-      ${m.hl?.baleias?.proporcao_long!=null?`<div class="linha-info"><span class="fr">Baleias Hyperliquid</span><span>${nf(m.hl.baleias.proporcao_long*100,0)}% compradas · ${m.hl.baleias.n_long+m.hl.baleias.n_short} posições</span></div>`:""}
-      ${ativosHtml(m)}
-      <ul class="motivos">${[...(m.motivos||[]).slice(0,3), ...(r.motivos||[]).slice(0,2)].map(t=>`<li>${esc(t)}</li>`).join("") || "<li>sem sinais relevantes ainda</li>"}</ul>
-    </div>`;
-  }).join("");
-}
-
-// ---------- SMART MONEY ----------
-function renderSmart(){
-  setTimeout(renderHL, 0);
-  document.getElementById("smart-expl").textContent = `Janela dos últimos ${E.janela_minutos} minutos. Clique numa linha para ver as últimas baleias.`;
-  const cab = ["Moeda","Preço","24h","Baleias compra","Baleias venda","CVD","Livro ±2%","Funding","OI 1h","L/S top","RSI 1h","Liq. longs / shorts","Placar"];
-  document.getElementById("tab-smart").innerHTML = `<tr>${cab.map(c=>`<th>${c}</th>`).join("")}</tr>` + E.moedas.map(m => `
-    <tr class="click ${m.simbolo===sel?"sel":""}" onclick="selecionar('${m.simbolo}')">
-      <td><i class="bola" style="background:${corMoeda(m.nome)}"></i> <b>${m.nome}</b></td>
-      <td>${fp(m.preco)}</td><td class="${cls(m.variacao_24h)}">${pc(m.variacao_24h,2)}</td>
-      <td class="pos">${fu(m.baleias_compra)} <span class="fr">(${m.baleias_n_compra})</span></td>
-      <td class="neg">${fu(m.baleias_venda)} <span class="fr">(${m.baleias_n_venda})</span></td>
-      <td class="${cls(m.cvd)}">${fu(m.cvd)}</td>
-      <td class="${cls(m.livro)}">${m.livro!=null?pc(m.livro*100,0):"-"}</td>
-      <td class="${cls(m.funding_pct==null?null:-m.funding_pct)}">${m.futuros?(m.funding_pct!=null?pc(m.funding_pct,4):"-"):"s/ futuros"}</td>
-      <td class="${cls(m.oi_var_1h_pct)}">${pc(m.oi_var_1h_pct)}</td>
-      <td>${m.top_long_short!=null?nf(m.top_long_short,2):"-"}</td>
-      <td class="${m.rsi_1h>70?"neg":m.rsi_1h<30?"pos":""}">${m.rsi_1h!=null?nf(m.rsi_1h,0):"-"}</td>
-      <td><span class="neg">${fu(m.liq_long)}</span> / <span class="pos">${fu(m.liq_short)}</span></td>
-      <td><span class="placar" style="${corPlacar(m.placar)}">${m.placar>0?"+":""}${m.placar}</span></td>
-    </tr>`).join("");
-  const m = moeda();
-  const pc_ = m.parede_compra, pv = m.parede_venda;
-  document.getElementById("baleias-lista").innerHTML =
-    `<div class="fr" style="margin-bottom:8px">${m.nome} · ordens a partir de ${fu(m.trade_grande_usd)} · paredes do livro: <span class="pos">${pc_?fp(pc_[0])+" ("+fu(pc_[1])+")":"-"}</span> / <span class="neg">${pv?fp(pv[0])+" ("+fu(pv[1])+")":"-"}</span></div>` +
-    (m.ultimas_baleias.length ? `<table><tr><th>Hora</th><th>Lado</th><th>Valor</th><th>Preço</th><th>Mercado</th></tr>` +
-      m.ultimas_baleias.map(b => `<tr><td>${new Date(b.ts*1000).toLocaleTimeString("pt-BR")}</td>
-        <td class="${b.lado==="compra"?"pos":"neg"}">${b.lado==="compra"?"Comprou":"Vendeu"}</td><td>${fu(b.valor)}</td><td>${fp(b.preco)}</td><td>${b.origem}</td></tr>`).join("") + `</table>`
-      : `<div class="vazio">Nenhuma baleia desde que o radar abriu.</div>`);
-}
-
-// ---------- SOPR ----------
-function renderSopr(){
-  document.getElementById("tab-sopr").innerHTML = `<tr><th>Ativo</th><th>Preço</th><th>SOPR 7d</th><th class="esq">Comportamento</th><th>Custo médio curto prazo</th><th>Preço vs custo</th></tr>` +
-    E.moedas.map(m => { const s = m.sopr || {};
-      return `<tr class="click ${m.simbolo===sel?"sel":""}" onclick="selecionar('${m.simbolo}')">
-        <td><i class="bola" style="background:${corMoeda(m.nome)}"></i> <b>${m.nome}</b></td><td>${fp(m.preco)}</td>
-        <td>${s.sopr7!=null?nf(s.sopr7,3):"-"}</td><td class="esq"><span class="pill ${s.tom||"neutro"}">● ${esc(s.comportamento||"carregando")}</span></td>
-        <td>${fp(s.custo_curto_prazo)}</td><td class="${cls(s.preco_vs_custo_pct)}">${pc(s.preco_vs_custo_pct)}</td></tr>`; }).join("");
-  const m = moeda(), s = m.sopr;
-  const det = document.getElementById("sopr-detalhe");
-  if(!det.dataset.montado){
-    det.innerHTML = `<h2 id="sopr-tit"></h2>
-      <p class="expl">SOPR = preço de venda ÷ custo de quem vendeu. Acima de 1: quem vendeu teve lucro. Abaixo de 1: vendeu no prejuízo. Feito só com preço e volume da Binance, sem ferramenta paga (é uma estimativa, não o SOPR on-chain).</p>
-      <div class="tfs" id="tfs">${[["4h","4 horas"],["1d","Diário"],["1w","Semanal"],["1M","Mensal"]].map(([k,n])=>`<button class="tf ${k===tf?"ativo":""}" data-tf="${k}">${n}</button>`).join("")}</div>
-      <div class="kpis" id="sopr-kpis"></div>
-      <div class="legenda"><span><i class="bola" style="background:var(--laranja)"></i>Preço</span><span><i class="bola" style="background:var(--roxo)"></i>Custo médio curto prazo (estimado)</span><span><i class="bola" style="background:var(--verde);border-radius:50%"></i>Lucro extremo</span><span><i class="bola" style="background:var(--verm);border-radius:50%"></i>Prejuízo extremo</span><span>- - - Limiares de extremo</span></div>
-      <div class="graf"><div id="g-preco" style="height:340px"></div><div class="dica" id="dica"></div></div>
-      <div id="g-sopr" style="height:180px;margin-top:4px"></div>`;
-    det.dataset.montado = 1;
-    document.getElementById("tfs").onclick = ev => { const b = ev.target.closest(".tf"); if(!b) return;
-      tf = b.dataset.tf; document.querySelectorAll(".tf").forEach(x=>x.classList.toggle("ativo",x===b)); carregarGrafico(); };
-    criarGraficos();
-  }
-  document.getElementById("sopr-tit").innerHTML = `<i class="bola" style="background:${corMoeda(m.nome)}"></i> ${m.nome} · SOPR estimado e custo médio de curto prazo`;
-  const L = s?.limites7 || {};
-  document.getElementById("sopr-kpis").innerHTML = s ? `
-    <div class="kpi"><div class="r">SOPR 7d agora</div><div class="v">${nf(s.sopr7||0,3)}</div><span class="pill ${s.tom}">${esc(s.comportamento)}</span></div>
-    <div class="kpi"><div class="r">SOPR do dia (parcial)</div><div class="v">${s.sopr_dia!=null?nf(s.sopr_dia,3):"-"}</div></div>
-    <div class="kpi"><div class="r">● Prejuízo extremo (7d)</div><div class="v neg">≤ ${L.p5!=null?nf(L.p5,3):"-"}</div></div>
-    <div class="kpi"><div class="r">● Lucro extremo (7d)</div><div class="v pos">≥ ${L.p95!=null?nf(L.p95,3):"-"}</div></div>
-    <div class="kpi"><div class="r">Custo médio curto prazo</div><div class="v">${fp(s.custo_curto_prazo)}</div><span class="${cls(s.preco_vs_custo_pct)}">preço ${pc(s.preco_vs_custo_pct)}</span></div>` : `<div class="fr">Carregando velas...</div>`;
-
-  const ex = m.extremos;
-  const tabela = (tit, lista, cor) => `<div class="card"><h3>${m.nome} · ${tit}</h3>
-    <p class="expl">Últimos 2 anos (diário). O que o preço fez depois:</p>
-    <table class="compacta"><tr><th>Dia</th><th>Preço</th><th>SOPR</th><th>7d depois</th><th>30d depois</th></tr>
-    ${(lista||[]).map(d => `<tr><td>${dt(d.t)}</td><td>${fp(d.preco)}</td><td class="${cor}">${nf(d.sopr,3)}</td>
-      <td class="${cls(d.ret7)}">${pc(d.ret7)}</td><td class="${cls(d.ret30)}">${pc(d.ret30)}</td></tr>`).join("")}</table></div>`;
-  const media = (r, n) => r && r[0]!=null ? `<b class="${cls(r[0])}">${pc(r[0])}</b> em média (${r[1]} dias)` : "-";
-  document.getElementById("sopr-extremos").innerHTML = ex ? tabela("maiores dias de lucro realizado", ex.lucro, "pos") +
-    tabela("maiores dias de prejuízo realizado", ex.prejuizo, "neg") +
-    `<div class="card"><h3>Isso funcionou no passado para ${m.nome}?</h3>
-      <p class="expl">Retorno do preço 30 dias depois, nos últimos 2 anos:</p>
-      <div class="linha-info"><span>Depois de dias de <span class="pos">lucro extremo</span></span><span>${media(ex.apos_lucro_extremo)}</span></div>
-      <div class="linha-info"><span>Depois de dias de <span class="neg">prejuízo extremo</span></span><span>${media(ex.apos_prejuizo_extremo)}</span></div>
-      <div class="linha-info"><span>Depois de um dia qualquer (referência)</span><span>${media(ex.apos_qualquer_dia)}</span></div>
-      <p class="expl" style="margin-top:10px">Se a diferença for pequena ou poucos dias, o sinal é fraco para essa moeda. Poucos casos = estatística frágil.</p></div>` : "";
-}
-
-let gP, gS, sPreco, sCusto, sSopr, linhas = [], mapa = {};
-function criarGraficos(){
-  const base = (el, h) => LightweightCharts.createChart(el, {height:h, autoSize:true,
-    layout:{background:{color:"transparent"}, textColor:"#8a94a6", fontSize:12},
-    grid:{vertLines:{color:"#161d29"}, horzLines:{color:"#161d29"}},
-    rightPriceScale:{borderColor:"#222a38"}, timeScale:{borderColor:"#222a38"},
-    crosshair:{mode:0}, localization:{locale:"pt-BR", timeFormatter:t=>dt(t)}});
-  const MESES = ["jan.","fev.","mar.","abr.","mai.","jun.","jul.","ago.","set.","out.","nov.","dez."];
-  const marcas = (t, tipo) => { const d = new Date(t*1000);
-    if(tipo===0) return String(d.getUTCFullYear());
-    if(tipo===1) return MESES[d.getUTCMonth()];
-    if(tipo===2) return d.getUTCDate()+" "+MESES[d.getUTCMonth()];
-    return d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); };
-  gP = base(document.getElementById("g-preco"), 340);
-  gS = base(document.getElementById("g-sopr"), 180);
-  [gP, gS].forEach(g => g.timeScale().applyOptions({tickMarkFormatter: marcas}));
-  gP.priceScale("right").applyOptions({mode:1});  // escala logarítmica
-  sPreco = gP.addLineSeries({color:"#f5a524", lineWidth:2, priceFormat:{type:"custom", formatter:fp}});
-  sCusto = gP.addLineSeries({color:"#8b7cf6", lineWidth:2, priceLineVisible:false, lastValueVisible:false, priceFormat:{type:"custom", formatter:fp}});
-  sSopr = gS.addHistogramSeries({base:1, priceFormat:{type:"custom", minMove:0.001, formatter:v=>nf(v,3)}});
-  let sync = false;
-  const ligar = (a, b) => a.timeScale().subscribeVisibleLogicalRangeChange(r => { if(sync||!r) return; sync=true; b.timeScale().setVisibleLogicalRange(r); sync=false; });
-  ligar(gP, gS); ligar(gS, gP);
-  const dica = document.getElementById("dica");
-  const mover = p => {
-    if(!p.time || !mapa[p.time] || !p.point){ dica.style.display="none"; return; }
-    const d = mapa[p.time], x = d.sopr;
-    const txt = x==null?"":x>=1?"vendendo com lucro":"vendendo com prejuízo";
-    dica.innerHTML = `<b>${tf==="4h"?new Date(d.t*1000).toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"}):dt(d.t)}</b><br>Preço: <b>${fp(d.preco)}</b>`+
-      (d.custo?`<br>Custo curto prazo: ${fp(d.custo)}`:"")+(x!=null?`<br>SOPR: <b>${nf(x,3)}</b> (${txt})`:"")+
-      (d.extremo?`<br><b class="${d.extremo==="lucro_extremo"?"pos":"neg"}">${d.extremo==="lucro_extremo"?"LUCRO EXTREMO":"PREJUÍZO EXTREMO"}</b>`:"");
-    dica.style.display="block";
-    const w = document.getElementById("g-preco").clientWidth;
-    dica.style.left = Math.min(p.point.x + 16, w - 200) + "px"; dica.style.top = "12px";
-  };
-  gP.subscribeCrosshairMove(mover); gS.subscribeCrosshairMove(mover);
-}
-
-async function carregarGrafico(){
-  if(!sel || !gP) { if(abaAtual==="sopr") setTimeout(carregarGrafico, 300); return; }
-  const g = await (await fetch(`/api/grafico?simbolo=${sel}&tf=${tf}`)).json();
-  const P = g.pontos || []; mapa = {};
-  P.forEach(p => mapa[p.t] = p);
-  sPreco.setData(P.map(p => ({time:p.t, value:p.preco})));
-  sCusto.setData(P.map(p => p.custo ? {time:p.t, value:p.custo} : {time:p.t}));
-  sSopr.setData(P.map(p => p.sopr==null ? {time:p.t} : {time:p.t, value:p.sopr,
-    color: p.extremo==="lucro_extremo" ? "#4ade80" : p.extremo==="prejuizo_extremo" ? "#ff6b72" : p.sopr>=1 ? "rgba(34,197,94,.55)" : "rgba(240,82,90,.55)"}));
-  sPreco.setMarkers(P.filter(p => p.extremo).map(p => ({time:p.t, position:"inBar", shape:"circle", size:0.6,
-    color: p.extremo==="lucro_extremo" ? "#22c55e" : "#f0525a"})));
-  linhas.forEach(l => sSopr.removePriceLine(l)); linhas = [];
-  const L = g.limites || {};
-  if(L.p95) linhas.push(sSopr.createPriceLine({price:L.p95, color:"#22c55e", lineStyle:2, lineWidth:1, title:"lucro extremo"}));
-  if(L.p5) linhas.push(sSopr.createPriceLine({price:L.p5, color:"#f0525a", lineStyle:2, lineWidth:1, title:"prejuízo extremo"}));
-  linhas.push(sSopr.createPriceLine({price:1, color:"#6b7280", lineStyle:0, lineWidth:1, title:""}));
-  gP.timeScale().fitContent(); gS.timeScale().fitContent();
-}
-
-// ---------- SUPORTES ----------
-let perfil = null;
-async function carregarPerfil(){ if(!sel) return; perfil = await (await fetch(`/api/perfil?simbolo=${sel}`)).json(); renderSuportes(); }
-function renderSuportes(){
-  const m = moeda(); if(!m) return;
-  document.getElementById("sup-titulo").innerHTML = `<i class="bola" style="background:${corMoeda(m.nome)}"></i> ${m.nome} · suportes e resistências`;
-  const niveis = [];
-  (m.suportes.resistencias||[]).forEach(r => niveis.push({p:r.preco, tipo:"res", nome:"Resistência (volume)", extra:nf(r.peso_pct,1)+"% do volume"}));
-  (m.suportes.suportes||[]).forEach(r => niveis.push({p:r.preco, tipo:"sup", nome:"Suporte (volume)", extra:nf(r.peso_pct,1)+"% do volume"}));
-  if(m.parede_venda) niveis.push({p:m.parede_venda[0], tipo:"res", nome:"Parede de venda no livro", extra:fu(m.parede_venda[1])});
-  if(m.parede_compra) niveis.push({p:m.parede_compra[0], tipo:"sup", nome:"Parede de compra no livro", extra:fu(m.parede_compra[1])});
-  const c = m.sopr?.custo_curto_prazo;
-  if(c) niveis.push({p:c, tipo:c>m.preco?"res":"sup", nome:"Custo médio curto prazo", extra:"preço médio de quem comprou nos últimos 155 dias"});
-  niveis.push({p:m.preco, tipo:"atual", nome:"Preço agora", extra:""});
-  niveis.sort((a,b) => b.p - a.p);
-  document.getElementById("sup-escada").innerHTML = niveis.map(n => `<div class="degrau ${n.tipo}">
-    <div><b>${fp(n.p)}</b> <span class="tag">${n.nome}${n.extra?" · "+n.extra:""}</span></div>
-    <span class="fr">${n.tipo==="atual"?"":pc((n.p/m.preco-1)*100)}</span></div>`).join("");
-  const F = perfil?.faixas || [];
-  if(!F.length){ document.getElementById("sup-perfil").innerHTML = '<div class="vazio">Carregando...</div>'; return; }
-  // agrupa para no máximo ~60 linhas
-  const passo = Math.ceil(F.length / 60), grupos = [];
-  for(let i=0;i<F.length;i+=passo){ const g = F.slice(i,i+passo);
-    grupos.push({preco:g.reduce((a,x)=>a+x.preco,0)/g.length, volume:g.reduce((a,x)=>a+x.volume,0), min:g[0].preco, max:g[g.length-1].preco}); }
-  const mx = Math.max(...grupos.map(g=>g.volume));
-  let iAgora = 0; grupos.forEach((g,i) => { if(Math.abs(g.preco-m.preco) < Math.abs(grupos[iAgora].preco-m.preco)) iAgora = i; });
-  grupos.forEach((g,i) => g.agora = i===iAgora);
-  document.getElementById("sup-perfil").innerHTML = grupos.reverse().map(g => {
-    const agora = g.agora;
-    return `<div class="f ${agora?"agora":g.preco>m.preco?"acima":"abaixo"}"><span style="text-align:right">${fp(g.preco)}${agora?" ◀":""}</span><div class="b" style="width:${Math.max(1,g.volume/mx*100)}%"></div></div>`;
-  }).join("");
-}
-
-// ---------- BALEIAS HYPERLIQUID ----------
-function renderHL(){
-  const m = moeda(), b = m.hl?.baleias, mk = m.hl?.mercado, el = document.getElementById("hl-card");
-  if(!el) return;
-  if(!b){ el.innerHTML = `<h3>Baleias da Hyperliquid · ${m.nome}</h3><div class="vazio">${E.externo?.erros?.["baleias hyperliquid"]||E.externo?.erros?.["ranking hyperliquid"] ? "Fonte fora do ar: "+esc(E.externo.erros["baleias hyperliquid"]||E.externo.erros["ranking hyperliquid"]) : "Carregando as posições das maiores contas (até 1 minuto)..."}</div>`; return; }
-  const tot = b.valor_long + b.valor_short, pl = tot ? b.valor_long/tot*100 : 0;
-  el.innerHTML = `<h3>Baleias da Hyperliquid · ${m.nome}</h3>
-    <p class="expl">Na Hyperliquid as posições são públicas. Somamos as das ${b.contas_analisadas} maiores contas (saldo acima de US$ 1 milhão). Atualiza a cada 10 min.</p>
-    <div class="kpis">
-      <div class="kpi"><div class="r">Compradas (long)</div><div class="v pos">${fu(b.valor_long)}</div><span class="fr">${b.n_long} posições · entrada média ${fp(b.entrada_media_long)}</span></div>
-      <div class="kpi"><div class="r">Vendidas (short)</div><div class="v neg">${fu(b.valor_short)}</div><span class="fr">${b.n_short} posições · entrada média ${fp(b.entrada_media_short)}</span></div>
-      <div class="kpi"><div class="r">Lucro aberto long / short</div><div class="v" style="font-size:17px"><span class="${cls(b.pnl_long)}">${fu(b.pnl_long)}</span> / <span class="${cls(b.pnl_short)}">${fu(b.pnl_short)}</span></div></div>
-      <div class="kpi"><div class="r">Funding Hyperliquid (8h) vs Binance</div><div class="v" style="font-size:17px">${mk?pc(mk.funding_8h_pct,4):"-"}</div><span class="fr">Binance: ${m.funding_pct!=null?pc(m.funding_pct,4):"-"} · OI HL ${fu(mk?.oi_usd)}</span></div>
-    </div>
-    <div class="trilho" style="height:16px;display:flex"><div style="width:${pl}%;background:var(--verde);border-radius:6px 0 0 6px"></div><div style="width:${100-pl}%;background:var(--verm);border-radius:0 6px 6px 0"></div></div>
-    <div class="fr" style="font-size:12px;margin:4px 0 14px">${nf(pl,0)}% do valor em posições compradas</div>
-    <div class="grid" style="grid-template-columns:2fr 1fr">
-      <div style="overflow-x:auto"><table class="compacta"><tr><th>Conta</th><th>Lado</th><th>Tamanho</th><th>Entrada</th><th>Liquidação</th><th>Alav.</th><th>Lucro aberto</th></tr>
-        ${b.maiores.map(p => `<tr><td class="fr">${esc(p.conta)}</td><td class="${p.lado==="long"?"pos":"neg"}">${p.lado==="long"?"Comprado":"Vendido"}</td><td>${fu(p.valor)}</td><td>${fp(p.entrada)}</td><td>${p.liquidacao?fp(p.liquidacao):"-"}</td><td>${p.alavancagem?nf(p.alavancagem,0)+"x":"-"}</td><td class="${cls(p.pnl)}">${fu(p.pnl)}</td></tr>`).join("") || '<tr><td class="vazio" colspan="7">Nenhuma baleia posicionada nesta moeda agora.</td></tr>'}</table></div>
-      <div><div class="fr" style="font-size:12.5px;margin-bottom:6px">Zonas de liquidação das baleias</div>
-        ${b.zonas_liquidacao.map(z => `<div class="degrau ${z.preco>m.preco?"res":"sup"}"><div><b>${fp(z.preco)}</b> <span class="tag">${z.long?fu(z.long)+" de longs":""}${z.long&&z.short?" · ":""}${z.short?fu(z.short)+" de shorts":""}</span></div><span class="fr">${pc((z.preco/m.preco-1)*100)}</span></div>`).join("") || '<div class="fr">Sem liquidações próximas.</div>'}
-        <p class="expl" style="margin-top:8px">O preço costuma ser "atraído" para onde há muita liquidação acumulada.</p></div>
-    </div>`;
-}
-
-// ---------- MERCADO GLOBAL ----------
-let gC = null, sC = null, gF = null, sF = null;
-function renderMercado(){
-  const x = E.externo || {}, md = x.medo || {}, dm = x.dominancia || {}, cb = x.coinbase || {}, etf = x.etf || {};
-  const corMedo = v => v<=25?"var(--verm)":v<=45?"#f59e0b":v<=55?"var(--cinza)":v<=75?"#84cc16":"var(--verde)";
-  document.getElementById("mg-kpis").innerHTML = `
-    <div class="kpi"><div class="r">Medo e Ganância</div><div class="v" style="color:${corMedo(md.valor)}">${md.valor??"-"}</div><span class="fr">${esc(md.texto||"")}${md.media_7d!=null?" · média 7d "+nf(md.media_7d,0):""}</span></div>
-    <div class="kpi"><div class="r">Dominância do BTC</div><div class="v">${dm.btc_pct!=null?nf(dm.btc_pct,1)+"%":"-"}</div><span class="fr">ETH ${dm.eth_pct!=null?nf(dm.eth_pct,1)+"%":"-"} · mercado 24h ${pc(dm.mcap_var_24h_pct)}</span></div>
-    <div class="kpi"><div class="r">Prêmio Coinbase BTC</div><div class="v ${cls(cb.BTC?.atual_pct)}">${cb.BTC?pc(cb.BTC.atual_pct,3):"-"}</div><span class="fr">média 24h ${cb.BTC?pc(cb.BTC.media_24h_pct,3):"-"}</span></div>
-    <div class="kpi"><div class="r">Prêmio Coinbase ETH</div><div class="v ${cls(cb.ETH?.atual_pct)}">${cb.ETH?pc(cb.ETH.atual_pct,3):"-"}</div><span class="fr">média 24h ${cb.ETH?pc(cb.ETH.media_24h_pct,3):"-"}</span></div>
-    <div class="kpi"><div class="r">ETFs BTC (5 / 20 pregões)</div><div class="v ${cls(etf.BTC?.soma_5d)}" style="font-size:18px">${etf.BTC?"$"+nf(etf.BTC.soma_5d,0)+"M":"-"}</div><span class="fr">20 pregões: ${etf.BTC?"$"+nf(etf.BTC.soma_20d,0)+"M":"-"}</span></div>
-    <div class="kpi"><div class="r">ETFs ETH (5 / 20 pregões)</div><div class="v ${cls(etf.ETH?.soma_5d)}" style="font-size:18px">${etf.ETH?"$"+nf(etf.ETH.soma_5d,0)+"M":"-"}</div><span class="fr">20 pregões: ${etf.ETH?"$"+nf(etf.ETH.soma_20d,0)+"M":"-"}</span></div>`;
-  const barras = (dias, k) => { if(!dias?.length) return '<div class="fr">Sem dados.</div>';
-    const mx = Math.max(...dias.map(d => Math.abs(d[k]))) || 1;
-    return `<div style="display:flex;align-items:center;gap:2px;height:120px">` + dias.map(d =>
-      `<div title="${d.data}: ${nf(d[k],1)}" style="flex:1;display:flex;flex-direction:column;justify-content:center;height:100%">
-        <div style="height:50%;display:flex;align-items:flex-end"><div style="width:100%;height:${d[k]>0?d[k]/mx*100:0}%;background:var(--verde);border-radius:2px 2px 0 0"></div></div>
-        <div style="height:50%"><div style="width:100%;height:${d[k]<0?-d[k]/mx*100:0}%;background:var(--verm);border-radius:0 0 2px 2px"></div></div></div>`).join("") +
-      `</div><div class="fr" style="display:flex;justify-content:space-between;font-size:11px"><span>${dias[0].data}</span><span>${dias[dias.length-1].data}</span></div>`; };
-  document.getElementById("mg-etf").innerHTML = ["BTC","ETH"].map(k => `<div style="margin-bottom:12px"><b>${k}</b> ${etf[k]?`<span class="fr">· último ${etf[k].ultimo.data}: <span class="${cls(etf[k].ultimo.total)}">${nf(etf[k].ultimo.total,1)}M</span></span>`:""}${barras(etf[k]?.dias?.slice(-20),"total")}</div>`).join("");
-  document.getElementById("mg-medo").innerHTML = md.serie ? `<div style="display:flex;align-items:flex-end;gap:2px;height:110px">` +
-    md.serie.map(d => `<div title="${dt(d.t)}: ${d.valor}" style="flex:1;height:${d.valor}%;background:${corMedo(d.valor)};border-radius:2px 2px 0 0;opacity:.85"></div>`).join("") + `</div>` : '<div class="fr">Sem dados.</div>';
-  const alts = E.moedas.filter(m => m.forca_btc);
-  document.getElementById("mg-forca").innerHTML = `<tr><th>Moeda</th><th>7d</th><th>30d</th><th>90d</th><th class="esq">Leitura</th></tr>` +
-    alts.map(m => `<tr class="click ${m.simbolo===sel?"sel":""}" onclick="selecionar('${m.simbolo}')"><td><i class="bola" style="background:${corMoeda(m.nome)}"></i> <b>${m.nome}</b></td>
-      <td class="${cls(m.forca_btc.var7_pct)}">${pc(m.forca_btc.var7_pct)}</td><td class="${cls(m.forca_btc.var30_pct)}">${pc(m.forca_btc.var30_pct)}</td><td class="${cls(m.forca_btc.var90_pct)}">${pc(m.forca_btc.var90_pct)}</td>
-      <td class="esq"><span class="pill ${m.forca_btc.tom}">${esc(m.forca_btc.texto)}</span></td></tr>`).join("");
-  const at = x.atualizado || {}, er = x.erros || {};
-  const nomes = ["hyperliquid","ranking hyperliquid","baleias hyperliquid","coinbase","medo e ganância","dominância"];
-  document.getElementById("mg-fontes").innerHTML = nomes.map(n => `<div class="linha-info"><span>${n}</span><span>${er[n]?`<span class="neg">fora do ar: ${esc(er[n])}</span>`:at[n]?`<span class="pos">ok</span> · ${hm(at[n])}`:"aguardando"}</span></div>`).join("");
-}
-function graficoSimples(el, h){ return LightweightCharts.createChart(el, {height:h, autoSize:true,
-  layout:{background:{color:"transparent"}, textColor:"#8a94a6", fontSize:12},
-  grid:{vertLines:{color:"#161d29"}, horzLines:{color:"#161d29"}},
-  rightPriceScale:{borderColor:"#222a38"}, timeScale:{borderColor:"#222a38", timeVisible:true}, localization:{locale:"pt-BR"}}); }
-async function carregarMercado(){
-  renderMercado();
-  const cb = E?.externo?.coinbase?.BTC;
-  if(cb){ if(!gC){ gC = graficoSimples(document.getElementById("g-premio"), 220);
-      sC = gC.addHistogramSeries({priceFormat:{type:"custom", minMove:0.001, formatter:v=>nf(v,3)+"%"}}); }
-    sC.setData(cb.serie.map(p => ({time:p.t, value:p.premio_pct, color:p.premio_pct>=0?"rgba(34,197,94,.7)":"rgba(240,82,90,.7)"})));
-    gC.timeScale().fitContent(); }
-  const alvo = E.moedas.find(m => m.simbolo===sel && m.forca_btc) || E.moedas.find(m => m.forca_btc);
-  if(alvo){ const r = await (await fetch(`/api/forca?simbolo=${alvo.simbolo}`)).json();
-    if(!gF){ gF = graficoSimples(document.getElementById("g-forca"), 200);
-      sF = gF.addLineSeries({color:"#8b7cf6", lineWidth:2, priceFormat:{type:"custom", minMove:0.1, formatter:v=>nf(v,1)}}); }
-    const b0 = r.serie.length ? r.serie[0].razao : 1;
-    sF.setData(r.serie.map(p => ({time:p.t, value:p.razao/b0*100}))); gF.timeScale().fitContent();
-    document.getElementById("forca-tit").textContent = `${alvo.nome}/BTC — acima de 100 = melhor que o BTC no período`; }
-}
-
-// ---------- PLANO ----------
-function lerPref(k, padrao){ try{ const v = localStorage.getItem(k); return v===null?padrao:Number(v); }catch(e){ return padrao; } }
-function salvarPref(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
-function mudarPref(k, el){ salvarPref(k, el.value); renderPlano(true); }
-function niveis(m){
-  const P = m.preco, s = m.sopr || {}, atr = s.atr14 || P*0.03;
-  let sup = (m.suportes.suportes||[]).map(x => ({p:x.preco, o:"zona de volume"}));
-  if(s.custo_curto_prazo && s.custo_curto_prazo < P) sup.push({p:s.custo_curto_prazo, o:"custo médio curto prazo"});
-  if(m.parede_compra) sup.push({p:m.parede_compra[0], o:"parede de compra no livro"});
-  let res = (m.suportes.resistencias||[]).map(x => ({p:x.preco, o:"zona de volume"}));
-  if(s.custo_curto_prazo && s.custo_curto_prazo > P) res.push({p:s.custo_curto_prazo, o:"custo médio curto prazo"});
-  if(s.max90) res.push({p:s.max90, o:"máxima de 90 dias"});
-  // níveis precisam estar a uma distância mínima do preço e entre si (proporcional à volatilidade)
-  const espaco = Math.max(atr*0.75, P*0.015);
-  const limpa = (l, cmp) => { l = l.filter(cmp).sort((a,b) => Math.abs(a.p-P)-Math.abs(b.p-P)); const out = [];
-    l.forEach(x => { if(!out.some(y => Math.abs(y.p-x.p) < espaco)) out.push(x); }); return out; };
-  sup = limpa(sup, x => x.p < P - espaco*0.66 && x.p > P*0.6);
-  res = limpa(res, x => x.p > P + espaco && x.p < P*2);
-  while(sup.length < 2) sup.push({p:(sup.length?sup[sup.length-1].p:P) - atr*1.5, o:"projeção pela volatilidade"});
-  while(res.length < 3) res.push({p:(res.length?res[res.length-1].p:P) + atr*2, o:"projeção pela volatilidade"});
-  return {sup, res, atr};
-}
-function renderPlano(forcar){
-  const m = moeda(); if(!m || !m.preco) return;
-  const ativo = document.activeElement; if(!forcar && ativo && ativo.tagName==="INPUT") return;  // não atrapalhar quem está digitando
-  const P = m.preco, s = m.sopr || {}, r = m.regime || {}, {sup, res, atr} = niveis(m);
-  const kV = "plano_valor_"+m.simbolo, kP = "plano_perda_"+m.simbolo;
-  const valor = lerPref(kV, 1000), perdaMax = lerPref(kP, 100);
-  document.getElementById("pl-tit").innerHTML = `<i class="bola" style="background:${corMoeda(m.nome)}"></i> ${m.nome} · plano para ${fp(P)}` +
-    (m.sinal ? ` <span class="pill ${["compra_forte","compra"].includes(m.sinal.tom)?"bom":["venda_forte","venda"].includes(m.sinal.tom)?"ruim":"neutro"}" style="margin-left:8px">Sinal direto: ${esc(m.sinal.texto)}</span>` : "");
-  document.getElementById("pl-entrada-usuario").innerHTML = `
-    <div class="kpi"><div class="r">Quanto quer investir nesta moeda (US$)</div><input type="number" min="0" step="50" value="${valor}" onchange="mudarPref('${kV}',this)" style="width:100%;margin-top:6px;background:var(--bg);border:1px solid var(--borda);color:var(--texto);border-radius:8px;padding:8px;font:inherit;font-size:16px"></div>
-    <div class="kpi"><div class="r">Perda máxima que aceita se der errado (US$)</div><input type="number" min="0" step="10" value="${perdaMax}" onchange="mudarPref('${kP}',this)" style="width:100%;margin-top:6px;background:var(--bg);border:1px solid var(--borda);color:var(--texto);border-radius:8px;padding:8px;font:inherit;font-size:16px"></div>
-    <div class="kpi"><div class="r">Volatilidade diária média (ATR 14)</div><div class="v">${s.atr14_pct!=null?nf(s.atr14_pct,1)+"%":"-"}</div><span class="fr">${fp(atr)} por dia</span></div>`;
-  // entradas: 30% agora, 30% no 1º suporte, 40% no 2º
-  const entradas = [{p:P, peso:.3, o:"preço atual"}, {p:sup[0].p, peso:.3, o:sup[0].o}, {p:sup[1].p, peso:.4, o:sup[1].o}];
-  const stop = Math.max(Math.min(...entradas.map(e=>e.p)) - atr, P*0.05);
-  const media = 1 / entradas.reduce((a,e) => a + e.peso/e.p, 0);
-  const riscoPct = (media - stop) / media;
-  const perda = valor * riscoPct;
-  const alvos = res.slice(0,3).map(x => ({...x, rr:(x.p-media)/(media-stop), ganho: valor*(x.p/media-1)}));
-  // checklist
-  const fl = m.filtro_btc, hl = m.hl?.baleias?.proporcao_long, md = E.externo?.medo?.valor;
-  const compraBoa = (m.lab?.ativos||[]).filter(x => x.tipo==="compra" && (x.tom==="bom"||x.tom==="fraco"));
-  const vendaBoa = (m.lab?.ativos||[]).filter(x => x.tipo==="venda" && (x.tom==="bom"||x.tom==="fraco"));
-  const itens = [
-    ["Filtro do BTC", fl ? fl.ok : (r.alta!=null ? r.alta>=r.baixa : null), fl ? fl.texto : "Regime do próprio BTC não está em baixa"],
-    ["Regime da moeda", r.alta!=null ? r.alta>=r.baixa : null, r.alta!=null ? `alta ${r.alta}% · lateral ${r.lateral}% · baixa ${r.baixa}%` : "carregando"],
-    ["SOPR fora da euforia", s.tom ? s.tom!=="lucro_extremo" : null, s.comportamento || "carregando"],
-    ["Preço perto de um suporte (até 3%)", (P/sup[0].p-1) <= 0.03, `suporte mais próximo ${fp(sup[0].p)} (${pc((sup[0].p/P-1)*100)})`],
-    ["Sinal de compra com histórico bom ativo", compraBoa.length ? true : (vendaBoa.length ? false : null), compraBoa.length ? compraBoa.map(x=>x.nome).join(", ") : vendaBoa.length ? "sinal de VENDA com histórico ativo: "+vendaBoa.map(x=>x.nome).join(", ") : "nenhum sinal testado ativo hoje"],
-    ["Fluxo ao vivo não vendedor", m.placar >= 0, `placar ${m.placar>0?"+":""}${m.placar}`],
-    ["Baleias da Hyperliquid não vendidas", hl!=null ? hl>=0.45 : null, hl!=null ? nf(hl*100,0)+"% compradas" : "sem dados"],
-    ["Sentimento sem ganância extrema", md!=null ? md<=75 : null, md!=null ? "medo e ganância "+md : "sem dados"],
-    ["Risco/retorno do 1º alvo ≥ 2", alvos[0].rr >= 2, "R/R "+nf(alvos[0].rr,1)],
-  ];
-  if(m.forca_btc) itens.splice(1, 0, ["Ganhando ou igual ao BTC", m.forca_btc.tom!=="baixa", m.forca_btc.texto+" ("+pc(m.forca_btc.var30_pct)+" em 30d)"]);
-  const aval = itens.filter(i => i[1]!==null), sim = aval.filter(i => i[1]).length, pct = aval.length ? sim/aval.length : 0;
-  let [vt, vc] = pct>=0.75 ? ["Condições favoráveis","bom"] : pct>=0.5 ? ["Condições mistas: entrar menor ou esperar","fraco"] : ["Condições desfavoráveis: melhor esperar","ruim"];
-  // BTC em baixa limita o resultado de altcoins: elas costumam cair junto
-  if(fl && !fl.ok && vc==="bom") [vt, vc] = ["Condições mistas: BTC em baixa, entrar menor ou esperar","fraco"];
-  document.getElementById("pl-check").innerHTML = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><span class="pill ${vc}" style="font-size:14px;padding:6px 14px">${vt}</span><b style="white-space:nowrap">${sim} de ${aval.length} a favor</b></div>` +
-    itens.map(([n, ok, d]) => `<div class="linha-info"><span>${ok===null?'<span class="fr">–</span>':ok?'<span class="pos">✓</span>':'<span class="neg">✗</span>'} ${n}</span><span class="fr" style="text-align:right;max-width:55%">${esc(d)}</span></div>`).join("");
-  const tamanhoMax = riscoPct > 0 ? perdaMax / riscoPct : 0;
-  document.getElementById("pl-compra").innerHTML = `
-    <div style="overflow-x:auto"><table class="compacta"><tr><th>Etapa</th><th>Preço</th><th>Distância</th><th>% do valor</th><th>US$</th><th>Quantidade</th></tr>
-    ${entradas.map((e,i) => `<tr><td>${i+1}ª compra <span class="fr">· ${esc(e.o)}</span></td><td>${fp(e.p)}</td><td class="fr">${pc((e.p/P-1)*100)}</td><td>${nf(e.peso*100,0)}%</td><td>$${nf(valor*e.peso,0)}</td><td>${nf(valor*e.peso/e.p, e.p>100?5:2)}</td></tr>`).join("")}
-    <tr><td><b>Preço médio</b> (se as 3 executarem)</td><td><b>${fp(media)}</b></td><td></td><td></td><td></td><td></td></tr></table></div>
-    <div class="degrau res" style="margin-top:12px"><div><b>Stop (invalidação): ${fp(stop)}</b> <span class="tag">1 ATR abaixo da última compra · ${pc((stop/P-1)*100)}</span></div><span class="neg">perda ${fu(-perda)}</span></div>
-    ${perda > perdaMax ? `<div class="ativos" style="border-left:3px solid var(--amarelo)">Com esse stop, a perda passaria do seu limite de $${nf(perdaMax,0)}. Para respeitar o limite, invista no máximo <b>$${nf(tamanhoMax,0)}</b> nesta moeda.</div>` : `<div class="ativos fr">A perda no stop ($${nf(perda,0)}) está dentro do seu limite de $${nf(perdaMax,0)}.</div>`}
-    <div class="fr" style="margin:12px 0 4px">Alvos para realizar lucro</div>
-    ${alvos.map((a,i) => `<div class="degrau sup"><div><b>Alvo ${i+1}: ${fp(a.p)}</b> <span class="tag">${esc(a.o)} · ${pc((a.p/P-1)*100)}</span></div><span><span class="pos">${fu(a.ganho)}</span> <span class="fr">· R/R ${nf(a.rr,1)}</span></span></div>`).join("")}
-    <p class="expl" style="margin-top:8px">Sugestão de saída: realizar 1/3 em cada alvo e, depois do 1º alvo, subir o stop para o preço médio (operação sem risco).</p>`;
-  // posição atual
-  const el = document.getElementById("pl-posicao");
-  if(m.quantidade > 0 && m.preco_medio > 0){
-    const q = m.quantidade, pm = m.preco_medio, lucro = (P-pm)*q;
-    const stopPos = P > pm*1.03 ? Math.max(pm, sup[0].p - atr) : stop;
-    el.innerHTML = `<h3>Sua posição atual: ${nf(q, q<1?5:2)} ${m.nome} a ${fp(pm)}</h3>
-      <p class="expl">Plano de realização para o que você já tem (edite quantidade e preço médio na aba ⚙ Ajustes).</p>
-      <div class="kpis"><div class="kpi"><div class="r">Valor atual</div><div class="v">${fu(P*q)}</div></div>
-        <div class="kpi"><div class="r">Resultado</div><div class="v ${cls(lucro)}">${fu(lucro)}</div><span class="${cls(lucro)}">${pc((P/pm-1)*100)}</span></div>
-        <div class="kpi"><div class="r">Stop de proteção sugerido</div><div class="v" style="font-size:18px">${fp(stopPos)}</div><span class="fr">${P>pm*1.03?"no preço médio ou abaixo do suporte (protege o lucro)":"1 ATR abaixo do 2º suporte"}</span></div></div>
-      <div style="overflow-x:auto"><table class="compacta"><tr><th>Realizar</th><th>Em</th><th>Quantidade</th><th>Resultado dessa parte</th></tr>
-      ${alvos.map((a,i) => `<tr><td>25% no alvo ${i+1}</td><td>${fp(a.p)} <span class="fr">(${pc((a.p/P-1)*100)})</span></td><td>${nf(q*.25, q<1?5:2)}</td><td class="${cls(a.p-pm)}">${fu((a.p-pm)*q*.25)}</td></tr>`).join("")}
-      <tr><td>Manter 25%</td><td class="fr">para uma alta maior</td><td>${nf(q*.25, q<1?5:2)}</td><td></td></tr></table></div>
-      <p class="expl" style="margin-top:8px">${s.tom==="lucro_extremo"||s.tom==="lucro_forte"?"<b>Atenção:</b> o SOPR está em realização forte/euforia agora — historicamente um bom momento para realizar parte. ":""}${vendaBoa.length?"<b>Sinal de venda com histórico bom ativo:</b> "+esc(vendaBoa.map(x=>x.nome).join(", "))+". ":""}</p>`;
-  } else el.innerHTML = `<h3>Sua posição atual</h3><div class="fr">Preencha a quantidade e o preço médio de ${m.nome} na aba <b>⚙ Ajustes</b> para ver aqui um plano de realização de lucro.</div>`;
-}
-
-// ---------- LABORATÓRIO ----------
-function ativosHtml(m){
-  const a = (m.lab && m.lab.ativos) || [];
-  if(!m.lab || !m.lab.resumo) return "";
-  if(!a.length) return `<div class="ativos fr">Nenhum sinal testado no Laboratório está ativo hoje.</div>`;
-  return `<div class="ativos"><div class="fr" style="margin:0 0 4px">Sinais ativos hoje (histórico em 30 dias)</div>` + a.map(x =>
-    `<div><span>${x.tipo==="compra"?"🟢":"🔴"} ${esc(x.nome)}${x.filtro_btc?" + filtro BTC":""}</span><span class="pill ${x.tom}">${esc(x.veredito)}</span></div>`).join("") + `</div>`;
-}
-function renderLabMatriz(){
-  const linhas = {};
-  E.moedas.forEach(m => (m.lab?.resumo||[]).forEach(x => {
-    const k = x.id; linhas[k] = linhas[k] || {nome:x.nome + (x.filtro_btc?" + filtro BTC":""), tipo:x.tipo, filtro:x.filtro_btc, ordem:Object.keys(linhas).length, cel:{}};
-    linhas[k].cel[m.nome] = x; }));
-  const chave = l => (l.tipo==="compra"?0:2) + (l.filtro?1:0);
-  const ks = Object.keys(linhas).sort((a,b) => chave(linhas[a])-chave(linhas[b]) || linhas[a].ordem-linhas[b].ordem);
-  if(!ks.length){ document.getElementById("lab-matriz").innerHTML = '<tr><td class="vazio">Calculando o laboratório... (leva alguns segundos depois que o SOPR carrega)</td></tr>'; return; }
-  document.getElementById("lab-matriz").innerHTML = `<tr><th>Sinal</th>${E.moedas.map(m=>`<th style="text-align:center">${m.nome}</th>`).join("")}</tr>` +
-    ks.map(k => `<tr><td>${linhas[k].tipo==="compra"?"🟢":"🔴"} ${esc(linhas[k].nome)}</td>` + E.moedas.map(m => { const x = linhas[k].cel[m.nome];
-      return `<td style="text-align:center">${x?`<span class="pill ${x.tom}" title="${x.casos} casos">${esc(x.veredito)}</span><div class="fr" style="font-size:11px">${x.casos} casos${x.ativo_hoje?' <span class="hoje">HOJE</span>':""}</div>`:'<span class="fr">—</span>'}</td>`; }).join("") + `</tr>`).join("");
-}
-async function carregarLab(){
-  if(!sel) return;
-  labDados = await (await fetch(`/api/lab?simbolo=${sel}`)).json();
-  renderLab();
-}
-function renderLab(){
-  const m = moeda(), L = labDados?.lab;
-  document.getElementById("lab-tit-compra").textContent = `${m.nome} · sinais de compra`;
-  document.getElementById("lab-tit-venda").textContent = `${m.nome} · sinais de venda / realização`;
-  if(!L){ ["lab-compra","lab-venda"].forEach(id => document.getElementById(id).innerHTML = '<tr><td class="vazio">Calculando...</td></tr>');
-    document.getElementById("lab-meta").textContent = "O laboratório roda depois que o SOPR carrega e se atualiza a cada 6 horas."; return; }
-  document.getElementById("lab-meta").innerHTML = `${m.nome}: <b>${nf(L.dias_testados,0)} dias testados</b> (de ${dt(L.inicio)} a ${dt(L.fim)}). Casos repetidos em menos de 10 dias contam como um só. Abaixo de 6 casos o resultado aparece como "Poucos casos".`;
-  const cel = (h, tipo) => { if(!h || h.media==null) return '<td class="fr">-</td>';
-    const bom = tipo==="compra" ? h.media > h.ref_media : h.media < h.ref_media;
-    return `<td><span class="${bom?"pos":"neg"}">${pc(h.media)}</span> <span class="fr">(${pc(h.ref_media)})</span></td>`; };
-  const tabela = tipo => `<tr><th>Sinal</th><th>Casos</th><th>Depois de 7d <span class="fr">(ref.)</span></th><th>30d <span class="fr">(ref.)</span></th><th>90d <span class="fr">(ref.)</span></th><th>Acerto 30d <span class="fr">(ref.)</span></th><th title="Pior movimento contra você, em média, nos 30 dias seguintes">Pior contra, 30d</th><th>Chance de sorte</th><th style="text-align:center">Veredito</th></tr>` +
-    L.sinais.filter(x => x.tipo===tipo).map(x => { const h = x.horizontes["30"] || {};
-      return `<tr class="click ${labSinal===x.id?"sel":""}" onclick="escolherSinal('${x.id}')" title="${esc(x.desc)}">
-        <td class="wrap"><b>${esc(x.nome)}</b>${x.filtro_btc?' <span class="fr">+ filtro BTC</span>':""}${x.ativo_hoje?'<span class="hoje">ATIVO HOJE</span>':""}</td>
-        <td>${h.casos??"-"}</td>${cel(x.horizontes["7"],tipo)}${cel(h,tipo)}${cel(x.horizontes["90"],tipo)}
-        <td>${h.acerto!=null?nf(h.acerto,0)+"%":"-"} <span class="fr">(${h.acerto_ref!=null?nf(h.acerto_ref,0)+"%":"-"})</span></td>
-        <td class="${tipo==="compra"?"neg":"pos"}">${pc(h.pior_medio)}</td>
-        <td>${h.sorte!=null?nf(h.sorte,0)+"%":"-"}</td>
-        <td style="text-align:center"><span class="pill ${x.tom}">${esc(x.veredito)}</span></td></tr>`; }).join("");
-  document.getElementById("lab-compra").innerHTML = tabela("compra");
-  document.getElementById("lab-venda").innerHTML = tabela("venda");
-  if(!labSinal) labSinal = (L.sinais.find(x => x.tom==="bom") || L.sinais[0]).id;
-  renderLabGrafico(); renderLabVivo();
-}
-function escolherSinal(id){ labSinal = id; renderLab(); }
-function renderLabGrafico(){
-  const L = labDados?.lab; if(!L) return;
-  const x = L.sinais.find(s => s.id===labSinal) || L.sinais[0];
-  document.getElementById("lab-tit-graf").textContent = `${moeda().nome} · ${x.nome}${x.filtro_btc?" + filtro BTC":""} — ${x.eventos.length} casos`;
-  document.getElementById("lab-desc").textContent = x.desc + (x.filtro_btc ? " Só conta quando o regime do BTC naquele dia não era de baixa." : "");
-  if(!gL){
-    gL = LightweightCharts.createChart(document.getElementById("g-lab"), {height:320, autoSize:true,
-      layout:{background:{color:"transparent"}, textColor:"#8a94a6", fontSize:12},
-      grid:{vertLines:{color:"#161d29"}, horzLines:{color:"#161d29"}},
-      rightPriceScale:{borderColor:"#222a38", mode:1}, timeScale:{borderColor:"#222a38"},
-      localization:{locale:"pt-BR", timeFormatter:t=>dt(t)}});
-    sL = gL.addLineSeries({color:"#f5a524", lineWidth:2, priceFormat:{type:"custom", formatter:fp}});
-  }
-  sL.setData(L.precos.map(p => ({time:p.t, value:p.preco})));
-  sL.setMarkers(x.eventos.map(e => ({time:e.t, position: x.tipo==="compra"?"belowBar":"aboveBar",
-    shape: x.tipo==="compra"?"arrowUp":"arrowDown", color: x.tipo==="compra"?"#22c55e":"#f0525a"})));
-  gL.timeScale().fitContent();
-  document.getElementById("lab-eventos").innerHTML = `<tr><th>Data do caso</th><th>Preço</th><th>7 dias depois</th><th>30 dias depois</th><th>90 dias depois</th></tr>` +
-    x.eventos.slice().reverse().map(e => `<tr><td>${dt(e.t)}</td><td>${fp(e.preco)}</td><td class="${cls(e.r7)}">${pc(e.r7)}</td><td class="${cls(e.r30)}">${pc(e.r30)}</td><td class="${cls(e.r90)}">${pc(e.r90)}</td></tr>`).join("");
-}
-function renderLabVivo(){
-  const v = labDados?.vivo, dias = labDados?.vivo_dias || 0, el = document.getElementById("lab-vivo");
-  if(!v || dias < 7){ el.innerHTML = `<div class="vazio">Coletando dados ao vivo: <b>${nf(dias,1)} de 14 dias</b> recomendados. Abra o app algumas vezes por dia; a análise aparece aqui sozinha.</div>`; return; }
-  const bloco = h => { const d = v[h]; if(!d) return "";
-    return `<h3 style="margin-top:10px">${h} horas depois</h3><table class="compacta"><tr><th>Placar</th><th>Horas de dados</th><th>Retorno médio</th><th>% das vezes que subiu</th></tr>` +
-      d.faixas.map(f => `<tr><td>${f.faixa}</td><td>${nf(f.horas_de_dados,0)} h</td><td class="${cls(f.media)}">${pc(f.media,2)}</td><td>${f.acerto_alta!=null?nf(f.acerto_alta,0)+"%":"-"}</td></tr>`).join("") +
-      `<tr><td class="fr">Referência (todas)</td><td></td><td class="fr">${pc(d.ref_media,2)}</td><td></td></tr></table>`; };
-  const sv = v.sinal, blocoSinal = sv ? `<h3 style="margin-top:14px">Sinal direto: o que o preço fez depois</h3><table class="compacta"><tr><th>Sinal</th><th>Horas de dados</th><th>24 h depois</th><th>72 h depois</th><th>7 dias depois</th></tr>` +
-    sv["24"].estados.map((e,i) => { const c = h => { const x = sv[h]?.estados[i]; return x && x.media!=null ? `<td class="${cls(x.media)}">${pc(x.media,2)} <span class="fr">(${nf(x.acerto_alta,0)}% subiu)</span></td>` : '<td class="fr">-</td>'; };
-      return `<tr><td>${esc(e.texto)}</td><td>${nf(e.horas_de_dados,0)} h</td>${c("24")}${c("72")}${c("168")}</tr>`; }).join("") +
-    `<tr><td class="fr">Referência (todas)</td><td></td><td class="fr">${pc(sv["24"].ref_media,2)}</td><td class="fr">${pc(sv["72"].ref_media,2)}</td><td class="fr">${pc(sv["168"].ref_media,2)}</td></tr></table>
-    <p class="expl">Se o sinal funciona: depois de "ZONA DE COMPRA" o preço deve subir mais que a referência, e depois de "ZONA DE VENDA" deve subir menos (ou cair).</p>` : "";
-  el.innerHTML = `<p class="expl">${nf(dias,1)} dias de dados. Se o placar funciona, as faixas positivas devem ter retorno maior que as negativas.${dias<14?" Ainda pouco tempo: trate como preliminar.":""}</p>` + blocoSinal + bloco("24") + bloco("72");
-}
-
-// ---------- AJUSTES ----------
-function renderAjustes(){
-  const a = Radar.ajustes(), f = document.getElementById("aj-form");
-  const inp = (v, w, step) => `<input type="text" inputmode="decimal" autocomplete="off" value="${String(v).replace(".", ",")}" style="width:${w};background:var(--bg);border:1px solid var(--borda);color:var(--texto);border-radius:8px;padding:8px;font:inherit">`;
-  f.innerHTML = `<div id="aj-lista">` + a.moedas.map((m,i) => `<div class="kpi aj-moeda" style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <input class="aj-s" value="${esc(m.simbolo)}" style="width:150px;background:var(--bg);border:1px solid var(--borda);color:var(--texto);border-radius:8px;padding:8px;font:inherit;text-transform:uppercase">
-        <button class="tf" onclick="this.closest('.aj-moeda').remove()">Remover</button></div>
-      <div class="kpis" style="margin:8px 0 0">
-        <label class="fr" style="font-size:12px">Quantidade<br>${inp(m.quantidade,"100%","any").replace("<input","<input class='aj-q'")}</label>
-        <label class="fr" style="font-size:12px">Preço médio (US$)<br>${inp(m.preco_medio,"100%","any").replace("<input","<input class='aj-p'")}</label>
-        <label class="fr" style="font-size:12px">Baleia a partir de (US$)<br>${inp(m.trade_grande_usd,"100%","1000").replace("<input","<input class='aj-b'")}</label>
-      </div></div>`).join("") + `</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="tf" onclick="addMoeda()">+ Adicionar moeda</button>
-    <button class="tf ativo" onclick="salvarAjustes()">Salvar</button></div>
-    <p class="expl" style="margin-top:8px">O símbolo é o par da Binance terminando em USDT (ex.: SOLUSDT). Use ponto ou vírgula nos decimais.</p>`;
-  f.dataset.ok = 1;
-  const chk = (id, v, t, d) => `<label class="linha-info" style="cursor:pointer"><span>${t}<br><span class="fr" style="font-size:12px">${d}</span></span><input type="checkbox" id="${id}" ${v?"checked":""} style="width:22px;height:22px"></label>`;
-  document.getElementById("aj-opcoes").innerHTML =
-    chk("aj-fluxo", a.fluxo_ao_vivo, "Fluxo ao vivo (baleias, CVD, liquidações)", "Conexão contínua com a Binance. Usa mais internet (cerca de 10 a 20 MB por hora com o app aberto).") +
-    chk("aj-hl", a.hyperliquid, "Baleias da Hyperliquid", "Baixa o ranking de traders uma vez por dia (alguns MB) e as posições a cada 10 min.") +
-    chk("aj-som", a.som, "Som nos alertas", "Bipe quando um alerta importante acontece.") +
-    `<label class="linha-info"><span>Atualizar livro, funding e OI a cada<br><span class="fr" style="font-size:12px">Menos frequente = menos internet.</span></span>
-      <select id="aj-int" style="background:var(--bg);color:var(--texto);border:1px solid var(--borda);border-radius:8px;padding:6px">
-      ${[30,60,120,300].map(v => `<option value="${v}" ${a.intervalo_indicadores==v?"selected":""}>${v<60?v+" s":v/60+" min"}</option>`).join("")}</select></label>
-    <div class="linha-info"><span>Notificações no celular<br><span class="fr" style="font-size:12px">Só funcionam com o app aberto (ou em segundo plano recente). No iPhone, só depois de "Adicionar à Tela de Início".</span></span>
-      <button class="tf" onclick="ativarNotif(this)">${a.notificacoes && window.Notification && Notification.permission==="granted" ? "Ligadas ✔" : "Ativar"}</button></div>
-    <div style="margin-top:10px"><button class="tf ativo" onclick="salvarAjustes()">Salvar</button></div>`;
-  document.getElementById("aj-manut").innerHTML = `
-    <div class="linha-info"><span>Recalcular o Laboratório agora<br><span class="fr" style="font-size:12px">Normalmente ele recalcula sozinho a cada 6 horas.</span></span><button class="tf" onclick="Radar.recalcularLab();this.textContent='Calculando...'">Recalcular</button></div>
-    <div class="linha-info"><span>Fotos guardadas para o teste ao vivo<br><span class="fr" style="font-size:12px">${Radar.fotos()} registros neste celular.</span></span><span></span></div>
-    <div class="linha-info"><span>Limpar dados em cache<br><span class="fr" style="font-size:12px">Apaga laboratório e ranking guardados (mantém moedas e histórico ao vivo).</span></span><button class="tf" onclick="Radar.limparCache()">Limpar</button></div>
-    <div class="linha-info"><span>Apagar tudo<br><span class="fr" style="font-size:12px">Volta às configurações iniciais e apaga o histórico ao vivo.</span></span><button class="tf" onclick="if(confirm('Apagar tudo deste celular?'))Radar.limparTudo()">Apagar</button></div>`;
-}
-function addMoeda(){ const l = document.getElementById("aj-lista"), d = document.createElement("div");
-  d.innerHTML = document.querySelector(".aj-moeda")?.outerHTML || ""; const n = d.firstElementChild; if(!n) return;
-  n.querySelector(".aj-s").value = ""; n.querySelector(".aj-q").value = 0; n.querySelector(".aj-p").value = 0; n.querySelector(".aj-b").value = 50000; l.appendChild(n); }
-const numero = v => Number(String(v).replace(",", ".")) || 0;
-function salvarAjustes(){
-  const moedas = [...document.querySelectorAll(".aj-moeda")].map(d => ({simbolo: d.querySelector(".aj-s").value.trim().toUpperCase(),
-    quantidade: numero(d.querySelector(".aj-q").value), preco_medio: numero(d.querySelector(".aj-p").value), trade_grande_usd: numero(d.querySelector(".aj-b").value) || 50000}))
-    .filter(m => /^[A-Z0-9]{2,15}USDT$/.test(m.simbolo));
-  if(!moedas.length){ alert("Coloque pelo menos uma moeda (ex.: BTCUSDT)."); return; }
-  Radar.salvar({moedas, fluxo_ao_vivo: document.getElementById("aj-fluxo").checked, hyperliquid: document.getElementById("aj-hl").checked,
-    som: document.getElementById("aj-som").checked, intervalo_indicadores: Number(document.getElementById("aj-int").value)});
-}
-async function ativarNotif(b){ const r = await Radar.pedirNotificacao();
-  b.textContent = r==="granted" ? "Ligadas ✔" : r==="sem_suporte" ? "Sem suporte neste navegador" : "Bloqueadas no navegador"; }
-if("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(()=>{});
-
-// ---------- ALERTAS ----------
-function renderAlertas(){
-  document.getElementById("lista-alertas").innerHTML = E.alertas.length ? E.alertas.map(a =>
-    `<div class="alerta ${a.tom}"><span class="fr">${a.hora}</span><b>${a.moeda}</b><span class="t">${esc(a.texto)}</span></div>`).join("")
-    : '<div class="vazio">Nenhum alerta ainda.</div>';
-}
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
 </script>
 </body>
 </html>

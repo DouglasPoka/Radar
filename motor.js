@@ -20,6 +20,7 @@ const PADRAO = {
   ],
   janela_minutos: 60, intervalo_indicadores: 60, fluxo_ao_vivo: true, hyperliquid: true,
   hl_contas: 60, hl_saldo_min: 1000000, notificacoes: false, som: true,
+  avisos_simples: true,   // notificar só mudanças do sinal direto, em linguagem simples
   oi_variacao_pct: 5, funding_extremo_pct: 0.05, liquidacoes_usd: 1000000, faixa_livro_pct: 2,
 };
 const ls = {
@@ -85,14 +86,17 @@ async function notificar(titulo, texto) {
     else new Notification(titulo, {body: texto, icon: "./icone-192.png"});
   } catch (e) {}
 }
-function emitir(simbolo, tipo, texto, {espera = 600, importante = true, tom = "neutro"} = {}) {
+function emitir(simbolo, tipo, texto, {espera = 600, importante = true, tom = "neutro", amigavel = null} = {}) {
   const k = simbolo + ":" + tipo, t = agoraS();
   if (t - (M.ultimoAviso[k] || 0) < espera) return;
   M.ultimoAviso[k] = t;
   M.alertas.push({ts: t, hora: hm(), moeda: simbolo.replace("USDT", ""), tipo, texto, importante, tom});
   M.alertas = M.alertas.slice(-200);
   ls.set("radar_alertas", M.alertas.slice(-80));
-  if (importante) { bipe(); notificar(`${simbolo.replace("USDT", "")} · Radar`, texto); }
+  if (!importante) return;
+  // no modo simples, só avisa o que tem texto amigável (mudanças do sinal direto)
+  if (AJ.avisos_simples && !amigavel) return;
+  bipe(); notificar(`${simbolo.replace("USDT", "")} · Radar das Baleias`, amigavel || texto);
 }
 
 // ------------------------------------------------------------ WebSockets (fluxo ao vivo)
@@ -427,9 +431,13 @@ function atualizarSinais(guardar) {
     if (!e.ciclo || !e.preco) continue;
     let novo; try { novo = C.avaliar(estadoMoeda(e), medo, s === "BTCUSDT"); } catch (err) { continue; }
     const [exib, mudou] = M.estab.aplicar(s, novo); M.sinais[s] = exib;
-    if (mudou) { const o = C.ESTADOS[novo.estado].ordem;
+    if (mudou) { const o = C.ESTADOS[novo.estado].ordem, nome = s.replace("USDT", "");
+      const amigavel = {compra: `🟢 ${nome}: bom momento para comprar.`, perto_compra: `🟡 ${nome}: quase bom para comprar.`,
+        aguardar: `⚪ ${nome}: voltou para "esperar".`, perto_venda: `🟠 ${nome}: bom para vender uma parte.`,
+        venda: `🔴 ${nome}: hora de vender uma parte (evite comprar).`}[novo.estado] +
+        (novo.referencia ? ` Preço de referência: US$ ${novo.referencia.preco.toLocaleString("pt-BR", {maximumFractionDigits: novo.referencia.preco >= 100 ? 0 : 4})}.` : "");
       emitir(s, "sinal_" + novo.estado, `Sinal direto: ${novo.texto} (compra ${novo.nota_compra} × venda ${novo.nota_venda}). ${novo.acao} Motivos: ${novo.motivos.slice(0, 3).join("; ")}`,
-        {espera: 7200, importante: novo.estado !== "aguardar", tom: o > 0 ? "alta" : o < 0 ? "baixa" : "neutro"}); }
+        {espera: 7200, importante: novo.estado !== "aguardar", tom: o > 0 ? "alta" : o < 0 ? "baixa" : "neutro", amigavel}); }
   }
   guardarFoto();
 }
