@@ -248,6 +248,9 @@ td.wrap{white-space:normal;min-width:220px}
       <p class="expl">Cada sinal foi testado em todo o histórico diário disponível na Binance, <b>sem olhar o futuro</b>: em cada dia, o sinal só usa dados até aquele dia. O retorno depois do sinal é comparado com o de um dia qualquer no mesmo período. "Chance de ser sorte" = em quantos % de sorteios de dias aleatórios o acaso foi tão bem quanto o sinal (quanto menor, melhor).</p>
       <p class="expl"><b>Cuidado com o acaso:</b> são dezenas de combinações de sinal × moeda, então algumas parecem boas só por sorte. Por isso o critério de "Funcionou" é rigoroso (até 5% de chance de sorte, acerto acima da média e vantagem mantida em 90 dias). Confie mais em sinais que aparecem bem em <b>várias moedas</b> e use o resultado como contexto, não como garantia.</p>
       <div class="fr" id="lab-meta"></div></div>
+    <div class="card"><h3 id="lab-tit-dec">Decisão final no histórico</h3>
+      <p class="expl">O sinal direto inteiro (Comprar / Esperar / Vender) refeito dia a dia no passado, só com o que se sabia em cada dia, e simulado como estratégia: compra tudo em "Zona de compra", 1/3 em "Perto de compra", vende 1/4 em "Perto de realizar" e metade em "Zona de venda", com saída (stop) e taxa de 0,1% por operação. Comparado com só comprar e segurar. O rigor e a saída são escolhidos nos primeiros 70% dos dias e só ficam se também funcionarem nos 30% finais. Fatores sem histórico (fluxo, baleias, opções, liquidações) ficam de fora.</p>
+      <div id="lab-dec"></div></div>
     <div class="card"><h3>Resumo entre moedas (horizonte de 30 dias)</h3>
       <p class="expl">Um sinal que funciona em várias moedas é mais confiável do que um que funciona em só uma.</p>
       <div style="overflow-x:auto"><table id="lab-matriz" class="compacta"></table></div></div>
@@ -857,6 +860,15 @@ function renderLab(){
         <td style="text-align:center"><span class="pill ${x.tom}">${esc(x.veredito)}</span></td></tr>`; }).join("");
   document.getElementById("lab-compra").innerHTML = tabela("compra");
   document.getElementById("lab-venda").innerHTML = tabela("venda");
+  const D = L.decisao;
+  document.getElementById("lab-tit-dec").textContent = `${m.nome} · decisão final no histórico`;
+  document.getElementById("lab-dec").innerHTML = !D || D.erro || !D.estrategia ? `<div class="fr">${D?.erro ? "Erro: " + esc(D.erro) : "Histórico curto demais."}</div>` : (() => {
+    const e = D.estrategia, c = D.confirmacao, lin = (r, t) => `<tr><td><b>${t}</b></td><td class="${r.retorno>=0?"pos":"neg"}">${pc(r.retorno,0)}</td><td class="${r.segurar>=0?"pos":"neg"}">${pc(r.segurar,0)}</td><td>${nf(r.queda_max,0)}% <span class="fr">× ${nf(r.queda_max_segurar,0)}%</span></td><td>${nf(r.tempo_investido,0)}%</td><td>${r.operacoes}</td><td>${r.stops}</td><td>${r.ciclos ? `${r.ciclos_lucro}/${r.ciclos}` : "-"}</td></tr>`;
+    return `<div style="overflow-x:auto"><table class="compacta"><tr><th>Período</th><th>Seguindo o radar</th><th>Só segurar</th><th>Pior queda (radar × segurar)</th><th>Tempo investido</th><th>Operações</th><th>Saídas no stop</th><th>Ciclos com lucro</th></tr>
+      ${lin(e, `Tudo (${nf(e.anos,1)} anos)`)}${lin(c, `Confirmação (últimos ${nf(c.anos*12,0)} meses)`)}</table></div>
+      <div style="overflow-x:auto;margin-top:12px"><table class="compacta"><tr><th>Quando o radar disse</th><th>Vezes</th><th>Acerto 7d</th><th>Acerto 30d</th><th>Preço 30d depois <span class="fr">(dia qualquer)</span></th></tr>
+      ${D.estados.map(z => `<tr><td>${esc(z.texto)}</td><td>${z.vezes}</td><td>${z.acerto7!=null?nf(z.acerto7,0)+"%":"-"}</td><td>${z.acerto30!=null?nf(z.acerto30,0)+"%":"-"}</td><td>${z.media30!=null?pc(z.media30):"-"} <span class="fr">(${pc(z.media30_qualquer_dia)})</span></td></tr>`).join("")}</table></div>
+      <p class="expl" style="margin-top:10px">Rigor adotado: <b>${D.rigor>0?"+":""}${D.rigor} pontos</b> (${esc(D.leitura_rigor)}). Saída: <b>${nf(D.stop_atr,1)}× a volatilidade diária</b> abaixo do preço médio de compra. "Acerto" = o preço foi na direção indicada.</p>`; })();
   const P = L.pesos || {};
   document.getElementById("lab-tit-pesos").textContent = `Pesos ajustados para ${m.nome}`;
   document.getElementById("lab-pesos").innerHTML = Object.keys(P).length ? Object.values(P).map(p => `<tr><td style="white-space:normal;padding:10px 4px">

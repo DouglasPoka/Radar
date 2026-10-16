@@ -448,7 +448,9 @@ function analisarMoeda(kl1d, kl4h) {
       custo_curto_prazo: custoAtual, preco_vs_custo_pct: custoAtual ? (fim.c / custoAtual - 1) * 100 : null,
       historico_dias: d1.length, atr14: atr, atr14_pct: atr && fim ? atr / fim.c * 100 : null,
       max90: ult90.length ? Math.max(...ult90.map(v => v.h)) : null, min90: ult90.length ? Math.min(...ult90.map(v => v.l)) : null,
-      fech7: d1.length > 8 ? d1[d1.length - 8].c : null, rsi_d: rsi(d1.slice(-200).map(v => v.c))},
+      fech7: d1.length > 8 ? d1[d1.length - 8].c : null, rsi_d: rsi(d1.slice(-200).map(v => v.c)),
+      max3: d1.length > 4 ? Math.max(...d1.slice(-4, -1).map(v => v.h)) : null,
+      sopr_virou: (() => { const v = s7.slice(-4).filter(z => z != null); return v.length >= 2 && v[v.length - 1] >= 1 && Math.min(...v.slice(0, -1)) < 1; })()},
     extremos: diasExtremos(d1, s1),
     suportes: perfilVolume(h4.slice(-540), fim ? fim.c : 0),
     _diarias: d1,
@@ -457,7 +459,7 @@ function analisarMoeda(kl1d, kl4h) {
 
 // ------------------------------------------------------------ LABORATÓRIO
 const HORIZONTES = [7, 30, 90], INTERVALO = 10, MIN_CASOS = 6, SORTEIOS = 3000;
-function preparar(d1) {
+function preparar(d1, funding) {
   const n = d1.length, fech = d1.map(v => v.c);
   const s1 = soprSerie(d1, 3), s7 = mediaPonderadaMovel(s1, d1.map(v => v.quote), 7), custo = custoCurtoPrazo(d1, 155);
   const p5 = Array(n).fill(null), p95 = Array(n).fill(null), p85 = Array(n).fill(null);
@@ -487,7 +489,17 @@ function preparar(d1) {
       local[i] = localPreco({subida: (fech[i] / fech[i - 7] - 1) / atrp[i], pvc: custo[i] ? (fech[i] / custo[i] - 1) * 100 : null,
         rsi: r[i], pos90: hi > lo ? (fech[i] - lo) / (hi - lo) : null}); }
   }
-  return {d1, fech, s7, custo, p5, p95, p85, rsi: r, sma50, regime, atrp, local};
+  // virada para cima: fechou acima da máxima dos 3 dias anteriores, ou o SOPR 7d voltou para cima de 1 nos últimos 3 dias
+  const virada = Array(n).fill(false);
+  for (let i = 4; i < n; i++) virada[i] = fech[i] > Math.max(d1[i - 1].h, d1[i - 2].h, d1[i - 3].h) ||
+    (s7[i] != null && s7[i] >= 1 && [1, 2, 3].some(k => s7[i - k] != null && s7[i - k] < 1));
+  // pisos e tetos simples (mínimas/máximas de 11 dias), conhecidos só 5 dias depois de acontecerem
+  const pivB = [], pivA = [];
+  for (let i = 5; i < n - 5; i++) { const j = d1.slice(i - 5, i + 6);
+    if (d1[i].l === Math.min(...j.map(v => v.l))) pivB.push(i); if (d1[i].h === Math.max(...j.map(v => v.h))) pivA.push(i); }
+  const fund = Array(n).fill(null);
+  if (funding) for (let i = 0; i < n; i++) { const f = funding[Math.floor(d1[i].t / 86400)]; if (f != null) fund[i] = f; }
+  return {d1, fech, s7, custo, p5, p95, p85, rsi: r, sma50, regime, atrp, local, virada, pivB, pivA, fund};
 }
 const um = n => Array(n).fill(1);
 const cruzouAcima = (a, b, i) => i > 0 && a[i] != null && a[i - 1] != null && b[i] != null && b[i - 1] != null && a[i - 1] < b[i - 1] && a[i] >= b[i];
@@ -606,18 +618,18 @@ function spearman(x, y) {
 }
 const NOMES_FATORES = {sopr_c: "SOPR (sinal de compra)", sopr_v: "SOPR (sinal de venda)", regime_c: "Tendência (compra)", regime_v: "Tendência (venda)",
   btc_c: "Filtro do BTC (compra)", btc_v: "BTC em baixa (venda)", forca_c: "Força contra o BTC",
-  local_c: "Preço com desconto (compra)", local_v: "Preço esticado (venda)"};
+  local_c: "Preço com desconto (compra)", local_v: "Preço esticado (venda)",
+  virada_c: "Desconto + virada para cima (compra)", funding_c: "Funding negativo (compra)", funding_v: "Funding alto (venda)"};
+function forcaSerie(x, xb) {
+  const pb = new Map(xb.d1.map(v => [v.t, v.c])), raz = x.d1.map(v => (pb.get(v.t) ? v.c / pb.get(v.t) : null));
+  return raz.map((r, i) => { if (r == null || i < 50) return null; const ja = raz.slice(i - 49, i + 1); if (ja.some(z => z == null)) return null;
+    const m50 = media(ja), r30 = raz[i - 30]; if (r30 == null) return null; const v30 = r / r30 - 1;
+    return r > m50 && v30 > 0 ? 1 : r <= m50 && v30 < 0 ? 0 : 0.5; });
+}
 function calibrarPesos(x, xb) {
   const n = x.fech.length, H = 30, ser = {};
   for (const k of Object.keys(NOMES_FATORES)) ser[k] = Array(n).fill(null);
-  let filtro = null, forcaTom = null;
-  if (xb) {
-    filtro = filtroBtc(x, xb);
-    const pb = new Map(xb.d1.map(v => [v.t, v.c])), raz = x.d1.map(v => (pb.get(v.t) ? v.c / pb.get(v.t) : null));
-    forcaTom = raz.map((r, i) => { if (r == null || i < 50) return null; const ja = raz.slice(i - 49, i + 1); if (ja.some(z => z == null)) return null;
-      const m50 = media(ja), r30 = raz[i - 30]; if (r30 == null) return null; const v30 = r / r30 - 1;
-      return r > m50 && v30 > 0 ? 1 : r <= m50 && v30 < 0 ? 0 : 0.5; });
-  }
+  const filtro = xb ? filtroBtc(x, xb) : null, forcaTom = xb ? forcaSerie(x, xb) : null;
   for (let i = 0; i < n; i++) {
     if (x.s7[i] != null && x.p5[i] != null && x.custo[i] != null) {
       const [, tom] = classificar(x.s7[i], {p5: x.p5[i], p85: x.p85[i], p95: x.p95[i]}), pvc = x.fech[i] / x.custo[i] - 1;
@@ -629,7 +641,9 @@ function calibrarPesos(x, xb) {
     if (r) { ser.regime_c[i] = lim01((r.alta - r.baixa + 30) / 60); ser.regime_v[i] = lim01((r.baixa - r.alta + 30) / 60); }
     if (filtro && x.regime[i]) { ser.btc_c[i] = filtro[i] ? 1 : 0; ser.btc_v[i] = filtro[i] ? 0 : 1; }
     if (forcaTom && forcaTom[i] != null) ser.forca_c[i] = forcaTom[i];
-    if (x.local[i]) { ser.local_c[i] = x.local[i].v; ser.local_v[i] = 1 - x.local[i].v; }
+    if (x.local[i]) { ser.local_c[i] = x.local[i].v; ser.local_v[i] = 1 - x.local[i].v;
+      if (x.local[i].v >= 0.6) ser.virada_c[i] = x.virada[i] ? 1 : 0; }
+    if (x.fund[i] != null) { ser.funding_c[i] = lim01(-x.fund[i] / 0.03); ser.funding_v[i] = lim01((x.fund[i] - 0.01) / 0.04); }
   }
   const fut = x.fech.map((c, i) => (i + H < n ? (x.fech[i + H] / c - 1) * 100 : null));
   const out = {};
@@ -650,14 +664,109 @@ function calibrarPesos(x, xb) {
   return out;
 }
 
-function rodarLab(d1, d1Btc, xBtc) {
-  const x = preparar(d1), ini = inicioValido(x);
+
+// ------------------------------------------------------------ TESTE DA DECISÃO FINAL NO HISTÓRICO
+// Refaz o sinal direto dia a dia no passado (só com o que se sabia naquele dia) e compara
+// "seguir o radar" com "comprar e segurar". Fatores ao vivo (fluxo, baleias, opções...) não têm histórico e ficam de fora.
+function mHist(x, i, ctx) {
+  const d = x.d1, c = x.fech[i], j90 = d.slice(Math.max(0, i - 89), i + 1);
+  const [, tom] = x.s7[i] != null && x.p5[i] != null ? classificar(x.s7[i], {p5: x.p5[i], p85: x.p85[i], p95: x.p95[i]}) : [null, null];
+  const sup = [], res = [];
+  for (const k of x.pivB) { if (k > i - 5) break; if (k >= i - 180 && d[k].l < c) sup.push({preco: d[k].l}); }
+  for (const k of x.pivA) { if (k > i - 5) break; if (k >= i - 180 && d[k].h > c) res.push({preco: d[k].h}); }
+  const sv = [1, 2, 3].some(q => x.s7[i - q] != null && x.s7[i - q] < 1) && x.s7[i] != null && x.s7[i] >= 1;
+  return {historico: true, preco: c, placar: 0, rigor: ctx.rigor || 0, lab: {ativos: []}, pesos: null,
+    sopr: {tom, preco_vs_custo_pct: x.custo[i] ? (c / x.custo[i] - 1) * 100 : null, custo_curto_prazo: x.custo[i],
+      atr14: x.atrp[i] * c, atr14_pct: x.atrp[i] * 100, max90: Math.max(...j90.map(v => v.h)), min90: Math.min(...j90.map(v => v.l)),
+      fech7: x.fech[i - 7], rsi_d: x.rsi[i], max3: Math.max(d[i - 1].h, d[i - 2].h, d[i - 3].h), sopr_virou: sv},
+    suportes: {suportes: sup, resistencias: res}, regime: x.regime[i],
+    filtro_btc: ctx.filtro ? {ok: ctx.filtro[i]} : null,
+    forca_btc: ctx.forca && ctx.forca[i] != null ? {tom: ctx.forca[i] === 1 ? "alta" : ctx.forca[i] === 0 ? "baixa" : "neutro"} : null,
+    funding_pct: x.fund[i]};
+}
+function estadosHist(x, ini, ctx) {
+  const est = Array(x.fech.length).fill(null);
+  for (let i = Math.max(ini, 90); i < x.fech.length; i++) {
+    if (!x.regime[i] || !x.atrp[i]) continue;
+    try { est[i] = avaliar(mHist(x, i, ctx), null, ctx.ehBtc).estado; } catch (e) {}
+  }
+  return est;
+}
+const TAXA = 0.001;   // 0,1% por operação (taxa da Binance)
+function simular(x, est, a, b, mStop = 2.5) {
+  let caixa = 1, qtd = 0, custoMedio = 0, stop = null, bloq = false, pico = 1, dd = 0, picoH = 1, ddH = 0, dias = 0, ops = 0, stops = 0;
+  let gasto = 0, recebido = 0; const ciclos = [];
+  const fechaCiclo = () => { if (gasto > 0) ciclos.push(recebido / gasto - 1); gasto = 0; recebido = 0; };
+  const vender = (q, c) => { const v = q * c * (1 - TAXA); caixa += v; recebido += v; qtd -= q; ops++; if (qtd <= 1e-12) { qtd = 0; custoMedio = 0; stop = null; fechaCiclo(); } };
+  for (let i = a; i < b; i++) {
+    const c = x.fech[i], e = est[i], ant = est[i - 1];
+    if (qtd > 0 && stop && c < stop) { vender(qtd, c); stops++; bloq = true; }
+    if (bloq && e && ESTADOS[e].ordem <= 0) bloq = false;
+    const valor = caixa + qtd * c, fr = valor ? qtd * c / valor : 0;
+    let alvo = null;
+    if (e && e !== ant && !bloq) alvo = {compra: 1, perto_compra: Math.max(fr, 0.33), perto_venda: fr * 0.75, venda: fr * 0.5}[e] ?? null;
+    if (alvo != null && alvo > fr + 0.01) {
+      const gastoAgora = Math.min(caixa, (alvo - fr) * valor), q = gastoAgora * (1 - TAXA) / c;
+      custoMedio = (custoMedio * qtd + c * q) / (qtd + q); qtd += q; caixa -= gastoAgora; gasto += gastoAgora; ops++;
+      stop = custoMedio - mStop * x.atrp[i] * c;
+    } else if (alvo != null && alvo < fr - 0.01) vender(qtd * (1 - alvo / fr), c);
+    const eq = caixa + qtd * c; if (qtd > 0) dias++;
+    pico = Math.max(pico, eq); dd = Math.min(dd, eq / pico - 1);
+    const h = c / x.fech[a]; picoH = Math.max(picoH, h); ddH = Math.min(ddH, h / picoH - 1);
+  }
+  const fim = caixa + qtd * x.fech[b - 1];
+  if (gasto > 0) ciclos.push((recebido + qtd * x.fech[b - 1]) / gasto - 1);
+  return {retorno: (fim - 1) * 100, segurar: (x.fech[b - 1] / x.fech[a] - 1) * 100, queda_max: dd * 100, queda_max_segurar: ddH * 100,
+    tempo_investido: b > a ? dias / (b - a) * 100 : 0, operacoes: ops, stops, ciclos: ciclos.length,
+    ciclos_lucro: ciclos.filter(r => r > 0).length, anos: (b - a) / 365};
+}
+function estatEstados(x, est, a, b) {
+  const out = [], n = x.fech.length;
+  for (const [e, H] of [["compra", 30], ["perto_compra", 30], ["perto_venda", 30], ["venda", 30]]) {
+    const lado = ESTADOS[e].ordem > 0 ? 1 : -1, r7 = [], r30 = [];
+    for (let i = Math.max(a, 1); i < b; i++) if (est[i] === e && est[i - 1] !== e) {
+      if (i + 7 < n) r7.push((x.fech[i + 7] / x.fech[i] - 1) * 100);
+      if (i + H < n) r30.push((x.fech[i + H] / x.fech[i] - 1) * 100);
+    }
+    const base = []; for (let i = a; i < b && i + 30 < n; i++) base.push((x.fech[i + 30] / x.fech[i] - 1) * 100);
+    const ac = l => (l.length ? l.filter(v => lado * v > 0).length / l.length * 100 : null);
+    out.push({estado: e, texto: ESTADOS[e].texto, vezes: r30.length || r7.length, acerto7: ac(r7), acerto30: ac(r30),
+      media30: r30.length ? media(r30) : null, media30_qualquer_dia: base.length ? media(base) : null});
+  }
+  return out;
+}
+const pontuar = r => Math.log(1 + r.retorno / 100) + 0.5 * Math.log(1 + r.queda_max / 100);
+function testarDecisao(x, xb, ini, ehBtc) {
+  const n = x.fech.length, a = Math.max(ini, 120);
+  if (n - a < 200) return null;
+  const ctx0 = {filtro: xb ? filtroBtc(x, xb) : null, forca: xb ? forcaSerie(x, xb) : null, ehBtc};
+  const corte = a + Math.floor((n - a) * 0.7), opcoes = {};
+  for (const k of [-6, -3, 0, 3, 6]) opcoes[k] = estadosHist(x, a, {...ctx0, rigor: k});
+  const tr = {}, te = {};
+  for (const k of Object.keys(opcoes)) { tr[k] = simular(x, opcoes[k], a, corte); te[k] = simular(x, opcoes[k], corte, n); }
+  let melhor = "0"; for (const k of Object.keys(tr)) if (pontuar(tr[k]) > pontuar(tr[melhor]) + 1e-9) melhor = k;
+  const adotado = pontuar(te[melhor]) >= pontuar(te["0"]) ? +melhor : 0;
+  const est = opcoes[adotado];
+  // saída: distância do stop (em volatilidades diárias abaixo do preço médio de compra)
+  let mStop = 2.5, mTreino = 2.5;
+  const trS = {}, teS = {}; for (const m of [2.5, 3.5, 5]) { trS[m] = simular(x, est, a, corte, m); teS[m] = simular(x, est, corte, n, m); }
+  for (const m of [3.5, 5]) if (pontuar(trS[m]) > pontuar(trS[mTreino]) + 1e-9) mTreino = m;
+  if (pontuar(teS[mTreino]) >= pontuar(teS[2.5])) mStop = mTreino;
+  return {rigor: adotado, rigor_treino: +melhor, inicio: x.d1[a].t, corte: x.d1[corte].t,
+    leitura_rigor: adotado > 0 ? "mais exigente que o padrão (funcionou melhor no histórico desta moeda)" : adotado < 0 ? "menos exigente que o padrão (funcionou melhor no histórico desta moeda)" : "padrão",
+    stop_atr: mStop, estrategia: simular(x, est, a, n, mStop), confirmacao: simular(x, est, corte, n, mStop), estados: estatEstados(x, est, a, n),
+    hoje: est[n - 1]};
+}
+
+function rodarLab(d1, d1Btc, xBtc, funding, ehBtc) {
+  const x = preparar(d1, funding), ini = inicioValido(x);
   const sinais = SINAIS.map(s => avaliarSinal(x, s, ini, null));
   let xb = null;
   if (d1Btc) { xb = xBtc || preparar(d1Btc); const f = filtroBtc(x, xb);
     for (const s of SINAIS) if (s.tipo === "compra") sinais.push(avaliarSinal(x, s, ini, f)); }
   const pesos = calibrarPesos(x, xb);
-  return {dias_testados: x.fech.length - ini, inicio: ini < d1.length ? d1[ini].t : null, fim: d1.length ? d1[d1.length - 1].t : null,
+  let decisao = null; try { decisao = testarDecisao(x, xb, ini, !!ehBtc); } catch (e) { decisao = {erro: String(e.message || e)}; }
+  return {decisao, dias_testados: x.fech.length - ini, inicio: ini < d1.length ? d1[ini].t : null, fim: d1.length ? d1[d1.length - 1].t : null,
     sinais, pesos, precos: d1.slice(ini).map(v => ({t: v.t, preco: v.c})), _x: x};
 }
 
@@ -797,6 +906,9 @@ function avaliar(m, medo, ehBtc) {
   const subidaPct = p && s.fech7 ? (p / s.fech7 - 1) * 100 : null;
   const loc = localPreco({subida: subidaPct != null && s.atr14_pct ? subidaPct / s.atr14_pct : null,
     pvc: p && s.custo_curto_prazo ? (p / s.custo_curto_prazo - 1) * 100 : pvc, rsi: s.rsi_d ?? null, pos90});
+  // virada: com o preço barato, só compra quando ele para de cair (fecha acima da máxima de 3 dias ou o SOPR volta acima de 1)
+  const virou = !!((p && s.max3 && p > s.max3) || s.sopr_virou);
+  if (loc && loc.v >= 0.6) C_(15, virou ? 1 : 0, virou ? "preço com desconto e começando a virar para cima" : null, "virada_c");
   if (loc) {
     C_(20, loc.v, loc.v >= 0.65 ? "preço com desconto (perto da parte de baixo dos últimos 90 dias)" : null, "local_c");
     V_(10, loc.esticado ? 1 : lim01(0.6 - loc.v), loc.esticado ? (subidaPct != null && subidaPct >= 8 ? `subiu ${pyRound(subidaPct)}% em 7 dias: preço esticado` : "preço esticado no curto prazo") : null, "local_v");
@@ -845,31 +957,34 @@ function avaliar(m, medo, ehBtc) {
     V_(10, ab.saldo < 0 ? Math.min(1, 0.5 - 0.25 * ab.saldo) : ab.saldo > 0 ? 0 : 0.3, ab.saldo < 0 ? ab.leitura : null, "absorcao_v");
   }
   const sp = (placar >= 0 ? "+" : "") + placar;
-  compra.push([10, lim01((placar + 15) / 45), placar >= 25 ? `fluxo comprador ao vivo (${sp})` : null]);
-  venda.push([10, lim01((-placar + 15) / 45), placar <= -25 ? `fluxo vendedor ao vivo (${sp})` : null]);
+  if (!m.historico) {
+    compra.push([10, lim01((placar + 15) / 45), placar >= 25 ? `fluxo comprador ao vivo (${sp})` : null]);
+    venda.push([10, lim01((-placar + 15) / 45), placar <= -25 ? `fluxo vendedor ao vivo (${sp})` : null]); }
   if (hl != null) {
     compra.push([10, lim01((hl - 0.35) / 0.35), hl >= 0.65 ? `baleias da Hyperliquid ${Math.round(hl * 100)}% compradas` : null]);
     venda.push([10, lim01((0.65 - hl) / 0.35), hl <= 0.35 ? `baleias da Hyperliquid ${Math.round((1 - hl) * 100)}% vendidas` : null]); }
-  if (m.funding_pct != null) venda.push([10, lim01((m.funding_pct - 0.01) / 0.04), m.funding_pct >= 0.04 ? "funding alto: muita alavancagem comprada" : null]);
+  if (m.funding_pct != null) {
+    V_(10, lim01((m.funding_pct - 0.01) / 0.04), m.funding_pct >= 0.04 ? "funding alto: muita alavancagem comprada" : null, "funding_v");
+    C_(5, lim01(-m.funding_pct / 0.03), m.funding_pct <= -0.01 ? "funding negativo: muita gente apostando na queda" : null, "funding_c"); }
   if (m.rsi_1h != null) venda.push([5, lim01((m.rsi_1h - 60) / 20), m.rsi_1h >= 75 ? `RSI 1h esticado (${Math.round(m.rsi_1h)})` : null]);
   const bc = ativos.filter(x => x.tipo === "compra" && (x.tom === "bom" || x.tom === "fraco"));
   const bv = ativos.filter(x => x.tipo === "venda" && (x.tom === "bom" || x.tom === "fraco"));
-  compra.push([10, bc.some(x => x.tom === "bom") ? 1 : bc.length ? 0.6 : 0, bc.length ? "histórico: " + bc[0].nome : null]);
-  venda.push([10, bv.some(x => x.tom === "bom") ? 1 : bv.length ? 0.6 : 0, bv.length ? "histórico: " + bv[0].nome : null]);
+  if (!m.historico) compra.push([10, bc.some(x => x.tom === "bom") ? 1 : bc.length ? 0.6 : 0, bc.length ? "histórico: " + bc[0].nome : null]);
+  if (!m.historico) venda.push([10, bv.some(x => x.tom === "bom") ? 1 : bv.length ? 0.6 : 0, bv.length ? "histórico: " + bv[0].nome : null]);
   if (medo != null) {
     compra.push([5, medo <= 30 ? 1 : medo <= 50 ? 0.6 : medo <= 75 ? 0.3 : 0, medo <= 30 ? `medo no mercado (${medo})` : null]);
     venda.push([5, medo >= 80 ? 1 : medo >= 70 ? 0.6 : 0, medo >= 70 ? `ganância no mercado (${medo})` : null]); }
   const pertoSup = !!(p && sup.length && (p - sup[0]) / atr <= 1), pertoRes = !!(p && res.length && (res[0] - p) / atr <= 1);
-  const ancC = pertoSup || tom === "prejuizo" || tom === "prejuizo_extremo" || ativos.some(x => x.tipo === "compra" && x.tom === "bom");
+  const ancC = pertoSup || (virou && loc && loc.v >= 0.6) || tom === "prejuizo" || tom === "prejuizo_extremo" || ativos.some(x => x.tipo === "compra" && x.tom === "bom");
   const ancV = pertoRes || tom === "lucro_forte" || tom === "lucro_extremo" || ativos.some(x => x.tipo === "venda" && x.tom === "bom");
   const nota = l => { const pe = l.reduce((s, [w, v]) => s + (v != null ? w : 0), 0);
     return pe ? pyRound(l.reduce((s, [w, v]) => s + (v != null ? w * v : 0), 0) / pe * 100) : 0; };
   const nc = nota(compra), nv = nota(venda);
-  let estado, trava = null;
-  if (nc >= 72 && nc - nv >= 30) { estado = ancC ? "compra" : "perto_compra"; if (!ancC) trava = "momento bom, mas o preço não está num ponto de compra (suporte/desconto)"; }
-  else if (nc >= 58 && nc - nv >= 15) estado = "perto_compra";
-  else if (nv >= 72 && nv - nc >= 30) { estado = ancV ? "venda" : "perto_venda"; if (!ancV) trava = "momento fraco, mas o preço não está num ponto de realização (resistência/euforia)"; }
-  else if (nv >= 58 && nv - nc >= 15) estado = "perto_venda";
+  let estado, trava = null; const k = m.rigor || 0;   // rigor: ajustado por moeda no teste do histórico
+  if (nc >= 72 + k && nc - nv >= 30) { estado = ancC ? "compra" : "perto_compra"; if (!ancC) trava = "momento bom, mas o preço não está num ponto de compra (suporte/desconto)"; }
+  else if (nc >= 58 + k && nc - nv >= 15) estado = "perto_compra";
+  else if (nv >= 72 + k && nv - nc >= 30) { estado = ancV ? "venda" : "perto_venda"; if (!ancV) trava = "momento fraco, mas o preço não está num ponto de realização (resistência/euforia)"; }
+  else if (nv >= 58 + k && nv - nc >= 15) estado = "perto_venda";
   else estado = "aguardar";
   if (estado === "compra" && !ehBtc && fl && !fl.ok) { estado = "perto_compra"; trava = "BTC em baixa: rebaixado de ZONA DE COMPRA"; }
   // trava de preço: nunca indicar compra logo depois de uma alta rápida (correr atrás do preço)
@@ -901,7 +1016,9 @@ function avaliar(m, medo, ehBtc) {
     perto_venda: pos ? "Considere realizar uma parte do lucro." : "Evite comprar agora.",
     venda: pos ? "Bom momento para realizar parte da posição." : "Evite comprar agora: risco de correção."}[estado];
   return {estado, ...ESTADOS[estado], nota_compra: nc, nota_venda: nv, motivos, confianca, referencia, acao: voltarAte ? `Não corra atrás do preço: espere voltar para perto de US$ ${fmtPreco(voltarAte)}.` : acao,
-    local: loc ? {v: loc.v, esticado: loc.esticado, subida7_pct: subidaPct} : null, voltar_ate: voltarAte};
+    local: loc ? {v: loc.v, esticado: loc.esticado, subida7_pct: subidaPct, virou} : null, voltar_ate: voltarAte,
+    pros: [...compra].sort((a, b) => b[0] * (b[1] || 0) - a[0] * (a[1] || 0)).filter(x => x[2]).map(x => x[2]).slice(0, 3),
+    contras: [...venda].sort((a, b) => b[0] * (b[1] || 0) - a[0] * (a[1] || 0)).filter(x => x[2]).map(x => x[2]).slice(0, 3)};
 }
 class Estabilizador {
   constructor(n = 4) { this.n = n; this.atual = {}; this.cand = {}; }
@@ -918,7 +1035,7 @@ class Estabilizador {
 
 const API = {pyRound, br, fmtUsd, fmtPreco, media, Janela, EstadoMoeda, leituraTexto, rsi, converter, agrupar, soprSerie,
   mediaPonderadaMovel, custoCurtoPrazo, percentil, classificar, analisarTimeframe, diasExtremos, perfilVolume, regimeProvavel,
-  forcaVsBtc, localPreco, analisarMoeda, preparar, calibrarPesos, analisarOpcoes, mapaLiquidacoes, analisarStablecoins, spearman, Absorcao, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
+  forcaVsBtc, localPreco, analisarMoeda, preparar, testarDecisao, simular, mHist, calibrarPesos, analisarOpcoes, mapaLiquidacoes, analisarStablecoins, spearman, Absorcao, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
 if (typeof module !== "undefined" && module.exports) module.exports = API;
 else raiz.Calc = API;
 })(typeof window !== "undefined" ? window : globalThis);

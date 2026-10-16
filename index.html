@@ -16,99 +16,86 @@
 <script src="./motor.js"></script>
 <style>
 :root{
-  --bg:#0b0f17; --card:#131a26; --card2:#1a2232; --borda:#253046; --texto:#eef1f6; --fraco:#93a0b5;
-  --verde:#22c55e; --verde-f:rgba(34,197,94,.15); --lima:#a3e635; --cinza:#9aa4b5;
-  --laranja:#fb923c; --verm:#f05252; --verm-f:rgba(240,82,90,.15); --amarelo:#facc15; --azul:#60a5fa;
+  --bg:#0a0d13; --card:#121722; --card2:#191f2c; --linha:rgba(255,255,255,.06); --texto:#eef1f6; --fraco:#8b95a7;
+  --verde:#34d399; --lima:#a3e635; --cinza:#a3acbb; --laranja:#fb923c; --verm:#f87171; --azul:#7cb4ff;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--texto);font:16px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
-.wrap{max-width:640px;margin:0 auto;padding:16px 14px calc(96px + env(safe-area-inset-bottom))}
-header{display:flex;justify-content:space-between;align-items:center;margin:4px 0 14px}
-h1{font-size:22px;margin:0;letter-spacing:-.2px}
+html,body{margin:0;background:var(--bg);color:var(--texto);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:560px;margin:0 auto;padding:18px 16px calc(92px + env(safe-area-inset-bottom))}
+header{display:flex;justify-content:space-between;align-items:center;margin:2px 2px 18px}
+h1{font-size:21px;margin:0;font-weight:750;letter-spacing:-.3px}
+.topo-dir{display:flex;align-items:center;gap:12px}
 .atualizado{font-size:12.5px;color:var(--fraco);display:flex;align-items:center;gap:6px}
-.dot{width:9px;height:9px;border-radius:50%;background:var(--cinza)}
-.dot.ok{background:var(--verde);box-shadow:0 0 8px var(--verde)} .dot.esp{background:var(--amarelo)} .dot.erro{background:var(--verm)}
-.card{background:var(--card);border:1px solid var(--borda);border-radius:18px;padding:16px;margin-bottom:14px}
-.clima{display:flex;gap:14px;align-items:center}
-.clima .emo{font-size:38px;line-height:1}
-.clima b{font-size:17px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--cinza)}
+.dot.ok{background:var(--verde)} .dot.esp{background:#facc15} .dot.erro{background:var(--verm)}
+.ajuda-btn{width:30px;height:30px;border-radius:50%;border:0;background:var(--card2);color:var(--fraco);font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+.card{background:var(--card);border-radius:20px;padding:18px;margin-bottom:12px}
 .fr{color:var(--fraco)} .pos{color:var(--verde)} .neg{color:var(--verm)}
-.ajuda summary{cursor:pointer;color:var(--azul);font-size:14.5px;list-style:none}
-.ajuda summary::-webkit-details-marker{display:none}
-.ajuda ul{margin:10px 0 0;padding-left:0;list-style:none;font-size:14.5px}
-.ajuda li{margin:8px 0;display:flex;gap:10px}
-.moeda-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-.nome{font-size:20px;font-weight:800;display:flex;align-items:center;gap:8px}
-.bola{width:12px;height:12px;border-radius:4px;display:inline-block}
-.preco{text-align:right;font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
-.preco small{display:block;font-size:13px;font-weight:500}
-.veredito{margin:14px 0 6px;padding:14px;border-radius:14px;display:flex;gap:12px;align-items:center}
-.veredito .emo{font-size:30px;line-height:1}
-.veredito .txt{font-size:19px;font-weight:800;line-height:1.25}
-.veredito .sub{font-size:14px;font-weight:500;color:var(--texto);opacity:.85;margin-top:2px}
-.v-compra_forte{background:var(--verde-f);color:var(--verde)} .v-compra{background:rgba(163,230,53,.12);color:var(--lima)}
-.v-neutro{background:var(--card2);color:var(--cinza)} .v-venda{background:rgba(251,146,60,.13);color:var(--laranja)}
-.v-venda_forte{background:var(--verm-f);color:var(--verm)}
-.termo{margin:14px 2px 4px}
-.termo .barra{position:relative;height:12px;border-radius:8px;background:linear-gradient(90deg,var(--verm),var(--laranja) 30%,#5b6475 50%,var(--lima) 70%,var(--verde))}
-.termo .marca{position:absolute;top:-5px;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid var(--bg);transform:translateX(-50%);transition:left .8s;box-shadow:0 2px 6px rgba(0,0,0,.5)}
-.termo .rot{display:flex;justify-content:space-between;font-size:12px;color:var(--fraco);margin-top:6px}
-.porque{margin:12px 0 0;padding:0;list-style:none;font-size:15px}
-.porque li{display:flex;gap:8px;margin:7px 0}
-.porque li::before{content:"•";color:var(--fraco)}
-.linha{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--borda);font-size:15px}
-.linha:first-of-type{margin-top:12px}
-.linha b{font-variant-numeric:tabular-nums;text-align:right}
-.btn{display:block;width:100%;margin-top:12px;padding:12px;border-radius:12px;border:1px solid var(--borda);background:var(--card2);color:var(--texto);font:inherit;font-size:15px;font-weight:600;cursor:pointer}
-.btn.prim{background:var(--verde);border-color:var(--verde);color:#062b12}
-.plano{margin-top:12px;padding:14px;border-radius:14px;background:var(--card2);font-size:15px}
-.plano h4{margin:14px 0 6px;font-size:15px} .plano h4:first-child{margin-top:0}
-.passo{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--borda)}
+.clima b{font-size:16px;font-weight:700} .clima .fr{font-size:14px;margin-top:2px}
+.ajuda{font-size:14.5px} .ajuda p{margin:8px 0}
+.topo{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.nome{font-size:17px;font-weight:750;display:flex;align-items:center;gap:8px}
+.nome small{font-size:13px;font-weight:500;color:var(--fraco)}
+.bola{width:9px;height:9px;border-radius:50%;display:inline-block}
+.preco{text-align:right;font-size:17px;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+.preco small{font-size:13px;font-weight:500;margin-left:6px}
+.veredito{margin:16px 0 4px;font-size:20px;font-weight:750;line-height:1.25;display:flex;align-items:center;gap:10px;letter-spacing:-.2px}
+.veredito i{width:11px;height:11px;border-radius:50%;flex:none;background:currentColor;box-shadow:0 0 0 4px color-mix(in srgb,currentColor 18%,transparent)}
+.t-compra_forte{color:var(--verde)} .t-compra{color:var(--lima)} .t-neutro{color:var(--cinza)} .t-venda{color:var(--laranja)} .t-venda_forte{color:var(--verm)}
+.acao{font-size:15.5px;margin:2px 0 0 21px}
+.motivo{font-size:13.5px;color:var(--fraco);margin:6px 0 0 21px}
+.minha{font-size:13.5px;margin:10px 0 0 21px}
+.rodape{display:flex;justify-content:flex-end;margin-top:12px}
+.det-btn{background:none;border:0;color:var(--azul);font:inherit;font-size:14px;font-weight:600;cursor:pointer;padding:4px 0}
+.detalhes{margin-top:12px;border-top:1px solid var(--linha);padding-top:4px;font-size:14.5px}
+.detalhes h4{margin:16px 0 6px;font-size:12.5px;font-weight:650;color:var(--fraco);text-transform:uppercase;letter-spacing:.6px}
+.detalhes ul{margin:0;padding-left:18px} .detalhes li{margin:4px 0}
+.passo{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--linha)}
 .passo:last-child{border-bottom:0}
-.passo b{font-variant-numeric:tabular-nums;white-space:nowrap}
-.aviso{font-size:12.5px;color:var(--fraco);text-align:center;margin:18px 6px}
-.carregando{text-align:center;padding:40px 10px;color:var(--fraco)}
-.giro{width:34px;height:34px;border:3px solid var(--borda);border-top-color:var(--verde);border-radius:50%;margin:0 auto 14px;animation:g 1s linear infinite}
+.passo b{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:650}
+.nota{font-size:13px;color:var(--fraco);margin:6px 0 0}
+.btn{display:block;width:100%;margin-top:12px;padding:13px;border-radius:14px;border:0;background:var(--card2);color:var(--texto);font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.btn.prim{background:var(--verde);color:#052e1c}
+.aviso{font-size:12px;color:var(--fraco);text-align:center;margin:18px 10px}
+.carregando{text-align:center;padding:48px 10px;color:var(--fraco)}
+.giro{width:30px;height:30px;border:3px solid var(--card2);border-top-color:var(--verde);border-radius:50%;margin:0 auto 14px;animation:g 1s linear infinite}
 @keyframes g{to{transform:rotate(360deg)}}
-nav{position:fixed;left:0;right:0;bottom:0;background:rgba(11,15,23,.96);border-top:1px solid var(--borda);display:flex;justify-content:space-around;padding:8px 6px calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(8px);z-index:10}
-nav button,nav a{flex:1;background:none;border:0;color:var(--fraco);font:inherit;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none;cursor:pointer;padding:4px}
-nav .ic{font-size:21px;line-height:1.1}
-nav .ativo{color:var(--texto)}
+nav{position:fixed;left:0;right:0;bottom:0;background:rgba(10,13,19,.94);border-top:1px solid var(--linha);display:flex;justify-content:space-around;padding:8px 6px calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(10px);z-index:10}
+nav button,nav a{flex:1;background:none;border:0;color:var(--fraco);font:inherit;font-size:11.5px;display:flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;cursor:pointer;padding:4px}
+nav .ic{font-size:19px;line-height:1.1;filter:grayscale(1);opacity:.7}
+nav .ativo{color:var(--texto)} nav .ativo .ic{filter:none;opacity:1}
 .oculto{display:none!important}
-.alerta{padding:12px 0;border-top:1px solid var(--borda);font-size:15px}
+.alerta{padding:12px 0;border-top:1px solid var(--linha);font-size:15px}
 .alerta:first-child{border-top:0}
 .alerta .h{font-size:12.5px;color:var(--fraco)}
-input.campo{width:100%;background:var(--bg);border:1px solid var(--borda);color:var(--texto);border-radius:10px;padding:11px;font:inherit;font-size:16px}
+input.campo{width:100%;background:var(--bg);border:1px solid var(--linha);color:var(--texto);border-radius:12px;padding:11px;font:inherit;font-size:16px}
 label.rot{font-size:13px;color:var(--fraco);display:block;margin:10px 0 4px}
 .dupla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.chave{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--borda)}
-.chave input{width:24px;height:24px}
-.badge{font-size:12px;padding:2px 8px;border-radius:999px;background:var(--card2);color:var(--fraco);white-space:nowrap}
+.chave{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--linha)}
+.chave input{width:22px;height:22px;accent-color:var(--verde)}
+.badge{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--card2);color:var(--fraco);white-space:nowrap}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>🐋 Radar das Baleias</h1>
-    <div class="atualizado" id="status"><span class="dot"></span>carregando</div>
+    <h1>Radar</h1>
+    <div class="topo-dir"><div class="atualizado" id="status"><span class="dot"></span>carregando</div>
+      <button class="ajuda-btn" onclick="document.getElementById('ajuda').classList.toggle('oculto')" aria-label="Como ler">?</button></div>
   </header>
 
   <!-- INÍCIO -->
   <section id="tela-inicio">
-    <div class="card" id="clima"></div>
-    <div class="card ajuda">
-      <details><summary>❓ Como ler esta tela</summary>
-        <ul>
-          <li><span>🟢</span><span><b>Bom momento para comprar</b>: quase tudo a favor e o preço está num bom ponto.</span></li>
-          <li><span>🟡</span><span><b>Quase bom para comprar</b>: inclinado para compra, mas ainda falta confirmação. Se comprar, compre pouco.</span></li>
-          <li><span>⚪</span><span><b>Esperar</b>: não há vantagem clara agora. Na dúvida, não faça nada.</span></li>
-          <li><span>🟠</span><span><b>Bom para vender uma parte</b>: sinais de cansaço na alta. Se tem lucro, pode garantir uma parte.</span></li>
-          <li><span>🔴</span><span><b>Hora de vender uma parte</b>: muitos sinais de topo. Evite comprar agora.</span></li>
-          <li><span>📍</span><span>O <b>termômetro</b> vai de "vender" (esquerda) a "comprar" (direita). Quanto mais na ponta, mais forte o sinal.</span></li>
-          <li><span>⚠️</span><span>São indicações automáticas, não garantia. Nunca invista dinheiro que você não pode perder.</span></li>
-        </ul>
-      </details>
+    <div class="card ajuda oculto" id="ajuda">
+      <b>Como ler</b>
+      <p><span class="t-compra_forte">●</span> <b>Bom momento para comprar</b>: preço com desconto e virando para cima. Compre em partes.</p>
+      <p><span class="t-compra">●</span> <b>Quase bom para comprar</b>: dá para começar com pouco.</p>
+      <p><span class="t-neutro">●</span> <b>Esperar</b>: sem vantagem clara. Na dúvida, não faça nada.</p>
+      <p><span class="t-venda">●</span> <b>Vender uma parte</b>: sinais de cansaço na alta.</p>
+      <p><span class="t-venda_forte">●</span> <b>Hora de vender uma parte</b>: muitos sinais de topo.</p>
+      <p class="fr">Toque em "Detalhes" para ver o porquê, o plano e quanto o radar acertou no passado. São indicações automáticas, não garantia.</p>
     </div>
+    <div class="card clima" id="clima"></div>
     <div id="moedas"><div class="carregando"><div class="giro"></div>Buscando os dados do mercado…<br><span style="font-size:13px">Na primeira vez pode levar até 30 segundos.</span></div></div>
     <div class="aviso">Indicações automáticas a partir de dados públicos. Não é recomendação de investimento.</div>
   </section>
@@ -203,6 +190,13 @@ function traduzir(t) {   // motivos técnicos -> português do dia a dia
     [/^muitas apostas na alta seriam liquidadas abaixo, perto de ([^:]+):/, m => `Muita gente apostando na alta seria forçada a sair perto de ${m[1]}, o que pode puxar o preço para baixo`],
     [/^dinheiro novo entrando/, "Está entrando dinheiro novo no mercado cripto"],
     [/^dinheiro saindo do mercado/, "Está saindo dinheiro do mercado cripto"],
+    [/^preço com desconto e começando a virar/, "O preço está barato e começou a subir de novo"],
+    [/^preço com desconto/, "O preço está barato em relação aos últimos meses"],
+    [/^subiu (\d+)% em 7 dias: o momento é bom/, m => `Subiu ${m[1]}% em 7 dias: melhor não correr atrás do preço`],
+    [/^subiu (\d+)% em 7 dias: preço esticado/, m => `Subiu ${m[1]}% em 7 dias: preço esticado`],
+    [/^preço esticado/, "Subiu rápido demais nos últimos dias"],
+    [/^preço ainda não está com desconto/, "Os sinais são bons, mas o preço ainda não está barato"],
+    [/^funding negativo/, "Muita gente apostando na queda, o que costuma virar combustível para subida"],
     [/^compra e venda equilibradas/, "Não há sinais fortes nem para comprar nem para vender"],
     [/^leve viés de compra/, "Leve inclinação para compra, mas ainda sem confirmação"],
     [/^leve viés de venda/, "Leve inclinação para venda, mas ainda sem confirmação"],
@@ -214,16 +208,16 @@ function traduzir(t) {   // motivos técnicos -> português do dia a dia
 }
 function clima() {
   const md = E.externo?.medo || {}, v = md.valor, tit = E.conclusao?.titulo || "";
-  const dir = /comprador/.test(tit) ? ["📈", "Mercado mais para alta"] : /vendedor/.test(tit) ? ["📉", "Mercado mais para queda"] : ["↔️", "Mercado sem direção definida"];
-  let humor = "";
-  if (v != null) humor = v <= 25 ? `O clima está de <b>muito medo</b> (${v}/100). Costuma ser época de oportunidade para quem compra com calma.`
-    : v <= 45 ? `O clima está de <b>medo</b> (${v}/100).` : v <= 55 ? `O clima está <b>neutro</b> (${v}/100).`
-    : v <= 75 ? `O clima está de <b>otimismo</b> (${v}/100).` : `O clima está de <b>euforia</b> (${v}/100). Hora de cautela com compras.`;
+  const dir = /comprador/.test(tit) ? "Mercado mais para alta" : /vendedor/.test(tit) ? "Mercado mais para queda" : "Mercado sem direção definida";
+  const partes = [];
+  if (v != null) partes.push(`${v <= 25 ? "muito medo" : v <= 45 ? "medo" : v <= 55 ? "humor neutro" : v <= 75 ? "otimismo" : "euforia"} (${v}/100)`);
   const st = E.externo?.stable;
-  const dinheiro_ = st && st.var7_pct != null ? `<div class="fr" style="font-size:14.5px;margin-top:4px">${st.tom === "alta" ? "💵 Está <b>entrando dinheiro novo</b> no mercado cripto" : st.tom === "baixa" ? "💸 Está <b>saindo dinheiro</b> do mercado cripto" : "💵 Entrada de dinheiro novo no mercado: <b>estável</b>"} (${usd(st.var7_usd)} na semana).</div>` : "";
-  return `<div class="clima"><div class="emo">${dir[0]}</div><div><b>${dir[1]}</b><div class="fr" style="font-size:14.5px">${humor || "Analisando o mercado…"}</div>${dinheiro_}</div></div>`;
+  if (st && st.tom === "alta") partes.push("entrando dinheiro novo"); else if (st && st.tom === "baixa") partes.push("saindo dinheiro");
+  let pl = "";
+  const tot = E.moedas.reduce((a, m) => { const p = m.placar_radar; if (p) { a[0] += p.ac7; a[1] += p.av7; } return a; }, [0, 0]);
+  if (tot[1]) pl = `<div class="fr">🎯 Placar do radar: acertou <b style="color:var(--texto)">${tot[0]} de ${tot[1]}</b> sinais em 7 dias</div>`;
+  return `<b>${dir}</b><div class="fr">${partes.length ? maiuscula(partes.join(" · ")) : "Analisando o mercado…"}</div>${pl}`;
 }
-
 // ===================================================================== plano simples (mesma lógica da aba Plano)
 function niveis(m) {
   const P = m.preco, s = m.sopr || {}, atr = s.atr14 || P * 0.03;
@@ -242,56 +236,50 @@ function niveis(m) {
 }
 const maiuscula = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 function planoHTML(m) {
-  const P = m.preco, {entradas, stop, alvos} = niveis(m), x = m.sinal;
-  const tem = m.quantidade > 0 && m.preco_medio > 0;
+  const P = m.preco, {entradas, alvos} = niveis(m), x = m.sinal, tem = m.quantidade > 0 && m.preco_medio > 0;
+  const atr = m.sopr?.atr14 || P * 0.03, mS = m.decisao?.stop_atr;
+  const e0 = x?.voltar_ate || entradas[0], medio = 1 / (0.3 / e0 + 0.3 / entradas[1] + 0.4 / entradas[2]);
+  const stop = Math.max(mS ? medio - mS * atr : Math.min(...entradas) - atr, P * 0.05);
+  const lista = l => `<ul>${l.map(traduzir).map(t => `<li>${esc(maiuscula(t))}</li>`).join("")}</ul>`;
   let h = "";
-  if (x && ["compra", "perto_compra", "aguardar"].includes(x.estado)) {
-    h += `<h4>🛒 Se for comprar, divida em 3 partes</h4>
-      <div class="passo"><span>1ª parte (30%) — ${x.voltar_ate ? "se voltar até" : "agora"}</span><b>${dinheiro(x.voltar_ate || entradas[0])}</b></div>
-      <div class="passo"><span>2ª parte (30%) — se cair até</span><b>${dinheiro(entradas[1])}</b></div>
-      <div class="passo"><span>3ª parte (40%) — se cair até</span><b>${dinheiro(entradas[2])}</b></div>
-      <p class="fr" style="font-size:13.5px;margin:6px 0 0">Comprar em partes protege você caso o preço continue caindo depois da primeira compra.</p>
-      <h4>🛑 Quando a ideia deu errada</h4>
-      <p style="margin:0">Se o preço cair abaixo de <b>${dinheiro(stop)}</b> (${pct((stop / P - 1) * 100)}), os sinais de compra deixam de valer. Considere vender para não perder mais.</p>`;
+  if (x.estado !== "aguardar" || x.voltar_ate) h += `<h4>Por quê</h4>${lista(x.motivos)}`;
+  if ((x.pros || []).length) h += `<h4>A favor de comprar</h4>${lista(x.pros)}`;
+  if ((x.contras || []).length) h += `<h4>Contra (sinais de venda)</h4>${lista(x.contras)}`;
+  if (!h) h = `<h4>Por quê</h4>${lista(x.motivos)}`;
+  const L = x.local;
+  if (L) h += `<div class="passo" style="margin-top:6px"><span>Preço agora</span><b class="${L.esticado || L.v < 0.4 ? "neg" : L.v >= 0.65 ? "pos" : ""}">${L.esticado ? `esticado${L.subida7_pct >= 5 ? ` (+${nf(L.subida7_pct, 0)}% em 7 dias)` : ""}` : L.v >= 0.65 ? (L.virou ? "com desconto e virando" : "com desconto") : L.v >= 0.4 ? "preço médio" : "caro no curto prazo"}</b></div>`;
+  const dg = dinheiroGrande(m);
+  if (dg) h += `<div class="passo"><span>Dinheiro grande</span><b class="${dg[1]}">${dg[0]}</b></div>`;
+  if (["compra", "perto_compra", "aguardar"].includes(x.estado)) {
+    h += `<h4>Se for comprar</h4>
+      <div class="passo"><span>30% ${x.voltar_ate ? "se voltar até" : "agora"}</span><b>${dinheiro(e0)}</b></div>
+      <div class="passo"><span>30% se cair até</span><b>${dinheiro(entradas[1])}</b></div>
+      <div class="passo"><span>40% se cair até</span><b>${dinheiro(entradas[2])}</b></div>
+      <div class="passo"><span>Sair se fechar abaixo de</span><b class="neg">${dinheiro(stop)}</b></div>
+      ${mS ? `<p class="nota">A distância da saída foi a que funcionou melhor no histórico desta moeda.</p>` : ""}`;
   }
-  h += `<h4>💰 Onde vender com lucro (por partes)</h4>` + alvos.map((a, i) =>
-    `<div class="passo"><span>${i + 1}º alvo${tem ? " — vender 1/4" : ""}</span><b>${dinheiro(a)} <span class="pos" style="font-weight:500">(${pct((a / P - 1) * 100, 0)})</span></b></div>`).join("");
-  if (tem && P > m.preco_medio * 1.03) h += `<p class="fr" style="font-size:13.5px;margin:6px 0 0">Você está no lucro. Uma estratégia comum é vender uma parte em cada alvo e manter o resto.</p>`;
-  // o que os grandes estão fazendo
-  const grandes = [];
-  const bc = m.baleias_compra || 0, bv = m.baleias_venda || 0;
-  if (bc + bv > 0) grandes.push(`Na última hora, as grandes ordens na Binance foram mais de <b>${bc > bv * 1.3 ? "compra" : bv > bc * 1.3 ? "venda" : "compra e venda equilibradas"}</b>${bc > bv * 1.3 || bv > bc * 1.3 ? ` (${usd(Math.max(bc, bv))})` : ""}.`);
-  const hl = m.hl?.baleias;
-  if (hl?.proporcao_long != null) grandes.push(`Na Hyperliquid, <b>${nf(hl.proporcao_long * 100, 0)}%</b> do dinheiro dos maiores investidores está apostando na alta.`);
-  const cd = m.condutor;
-  if (cd?.leitura && !cd.aquecendo && cd.tipo && cd.tipo !== "neutro") grandes.push(traduzir(cd.leitura) + ".");
-  const ab = m.absorcao;
-  if (ab?.pronto && ab.saldo) grandes.push(traduzir(ab.leitura) + ".");
-  else if (ab && !ab.pronto) grandes.push(`<span class="fr">(A detecção de compradores e vendedores escondidos começa depois de uns 20 minutos com o app aberto.)</span>`);
-  const pa = m.paredes;
-  if (pa && !pa.aquecendo) {
-    const rc = pa.reais.filter(w => w.lado === "compra")[0], rv = pa.reais.filter(w => w.lado === "venda")[0];
-    if (rc) grandes.push(`Há uma ordem grande e firme de <b>compra</b> esperando em ${dinheiro(rc.preco)} (${usd(rc.valor)}), que pode segurar quedas.`);
-    if (rv) grandes.push(`Há uma ordem grande e firme de <b>venda</b> esperando em ${dinheiro(rv.preco)} (${usd(rv.valor)}), que pode segurar altas.`);
-    if (pa.sumidas_compra + pa.sumidas_venda >= 3) grandes.push(`Atenção: ${pa.sumidas_compra + pa.sumidas_venda} ordens grandes apareceram e sumiram rápido na última hora (possíveis blefes). O radar ignora essas.`);
+  h += `<h4>Onde vender com lucro${tem ? " (1/4 em cada)" : ""}</h4>` + alvos.map((a, i) =>
+    `<div class="passo"><span>${i + 1}º alvo</span><b>${dinheiro(a)} <span class="pos" style="font-weight:500">${pct((a / P - 1) * 100, 0)}</span></b></div>`).join("");
+  // quanto o radar acertou
+  const d = m.decisao, pr = m.placar_radar;
+  if ((d && d.estrategia) || (pr && pr.sinais)) {
+    h += `<h4>O radar funciona nesta moeda?</h4>`;
+    if (d && d.estrategia) { const e = d.estrategia, c = d.confirmacao, cp = d.estados.find(z => z.estado === "perto_compra"), cf = d.estados.find(z => z.estado === "compra");
+      const ganha = e.retorno > e.segurar;
+      h += `<div class="passo"><span>Seguindo o radar (${nf(e.anos, 1)} anos)</span><b class="${e.retorno >= 0 ? "pos" : "neg"}">${pct(e.retorno, 0)}</b></div>
+        <div class="passo"><span>Só segurando a moeda</span><b class="${e.segurar >= 0 ? "pos" : "neg"}">${pct(e.segurar, 0)}</b></div>
+        <div class="passo"><span>Pior queda: radar × segurar</span><b>${nf(e.queda_max, 0)}% × ${nf(e.queda_max_segurar, 0)}%</b></div>`;
+      const sinalC = cf && cf.vezes >= 3 ? cf : cp;
+      if (sinalC && sinalC.vezes) h += `<div class="passo"><span>Sinais de compra que subiram em 30 dias</span><b>${nf(sinalC.acerto30 ?? 0, 0)}% <span class="fr" style="font-weight:400">(${sinalC.vezes}×)</span></b></div>`;
+      h += `<p class="nota">${ganha ? "No histórico, seguir o radar foi melhor que só segurar" : "No histórico, só segurar rendeu mais que seguir o radar"}${c ? `; nos últimos ${nf(c.anos * 12, 0)} meses (teste de confirmação): ${pct(c.retorno, 0)} × ${pct(c.segurar, 0)}` : ""}. Considera taxas e saídas; não inclui baleias, fluxo e opções (sem histórico).</p>`; }
+    if (pr && pr.sinais) h += `<div class="passo" style="margin-top:6px"><span>Ao vivo neste celular</span><b>${pr.av7 ? `${pr.ac7} de ${pr.av7} acertos (7 dias)` : `${pr.sinais} sinal(is) aguardando conferência`}</b></div>`;
   }
-  const nc = Object.keys(m.corretoras || {}).length;
-  if (nc > 1 && grandes.length) grandes.unshift(`<span class="fr">(Somando ${nc} corretoras: ${Object.keys(m.corretoras).map(c => ({binance: "Binance", bybit: "Bybit", okx: "OKX", coinbase: "Coinbase"})[c] || c).join(", ")}.)</span>`);
-  if (grandes.length) h += `<h4>🐋 O que os grandes investidores estão fazendo</h4><p style="margin:0">${grandes.join(" ")}</p>`;
-  const ml = m.mapa_liq;
-  if (ml && (ml.ima_acima || ml.ima_abaixo)) {
-    h += `<h4>🧲 Onde o preço pode ser "puxado"</h4><p style="margin:0">Estimativa de onde há muitas apostas alavancadas que seriam forçadas a fechar:`;
-    if (ml.ima_acima) h += ` acima, perto de <b>${dinheiro(ml.ima_acima)}</b> (${pct((ml.ima_acima / m.preco - 1) * 100)});`;
-    if (ml.ima_abaixo) h += ` abaixo, perto de <b>${dinheiro(ml.ima_abaixo)}</b> (${pct((ml.ima_abaixo / m.preco - 1) * 100)}).`;
-    h += ` ${ml.tom === "alta" ? "Hoje o lado de cima pesa mais, o que favorece subida." : ml.tom === "baixa" ? "Hoje o lado de baixo pesa mais, o que favorece queda." : "Os dois lados estão equilibrados."}</p>`;
-  }
-  const op = m.opcoes;
-  if (op) h += `<h4>🎯 O que os profissionais de opções esperam</h4><p style="margin:0">${maiuscula(traduzir(op.leitura))}.${op.max_dor && op.dias_vencimento != null ? ` O próximo vencimento grande é em ${Math.max(1, Math.round(op.dias_vencimento))} dias, e o preço costuma ser puxado para perto de <b>${dinheiro(op.max_dor)}</b> até lá.` : ""}</p>`;
-  // histórico
-  const at = (m.lab?.ativos || []).filter(a => a.tom === "bom" || a.tom === "fraco");
-  if (at.length) { const a = at[0];
-    h += `<h4>📚 Já aconteceu antes?</h4><p style="margin:0">Uma situação parecida ("${esc(a.nome)}") apareceu <b>${a.casos} vezes</b> no passado. Em ${nf(a.acerto30 || 0, 0)}% delas o preço ${a.tipo === "compra" ? "subiu" : "caiu"} no mês seguinte.</p>`; }
-  return `<div class="plano">${h}</div>`;
+  // mercado de derivativos em uma linha cada
+  const ml = m.mapa_liq, op = m.opcoes, extra = [];
+  if (ml && ml.tom && ml.tom !== "neutro" && (ml.tom === "alta" ? ml.ima_acima : ml.ima_abaixo)) extra.push(`Apostas alavancadas podem puxar o preço para ${dinheiro(ml.tom === "alta" ? ml.ima_acima : ml.ima_abaixo)}.`);
+  if (op && op.max_dor && op.dias_vencimento != null && op.dias_vencimento <= 14) extra.push(`Vencimento de opções em ${Math.max(1, Math.round(op.dias_vencimento))} dias; preço costuma ir para perto de ${dinheiro(op.max_dor)}.`);
+  if (extra.length) h += `<h4>Para ficar de olho</h4><ul>${extra.map(t => `<li>${t}</li>`).join("")}</ul>`;
+  return `<div class="detalhes">${h}</div>`;
 }
 
 // ===================================================================== "dinheiro grande agora" (resumo para iniciantes)
@@ -307,35 +295,30 @@ function dinheiroGrande(m) {
 }
 
 // ===================================================================== cartões
+function acaoTexto(x, tem) {
+  const ref = x.referencia?.preco;
+  if (x.voltar_ate) return `Subiu rápido. Espere voltar para perto de ${dinheiro(x.voltar_ate)}.`;
+  return {compra: `Compre em partes${ref ? `, até ${dinheiro(ref)}` : ""}.`,
+    perto_compra: `Se quiser, comece com pouco${ref ? `, até ${dinheiro(ref)}` : ""}.`,
+    aguardar: "Sem vantagem clara agora. Melhor esperar.",
+    perto_venda: tem ? "Pode vender uma parte do lucro." : "Não é hora de comprar.",
+    venda: tem ? "Bom momento para vender uma parte." : "Evite comprar: risco de queda."}[x.estado];
+}
 function cartao(m) {
   const cor = CORES[m.nome] || "#8b7cf6", x = m.sinal;
-  const topo = `<div class="moeda-topo"><div><div class="nome"><i class="bola" style="background:${cor}"></i>${m.nome}</div>
-      <div class="fr" style="font-size:13px">${NOMES[m.nome] || ""}</div></div>
-    <div class="preco">${dinheiro(m.preco)}<small class="${m.variacao_24h >= 0 ? "pos" : "neg"}">${m.variacao_24h >= 0 ? "▲" : "▼"} ${pct(m.variacao_24h)} hoje</small></div></div>`;
-  if (!x) return `<div class="card">${topo}<div class="veredito v-neutro"><div class="emo">⏳</div><div><div class="txt">Analisando…</div><div class="sub">Calculando os indicadores desta moeda.</div></div></div></div>`;
-  const S = SIMPLES[x.estado], tem = m.quantidade > 0 && m.preco_medio > 0;
-  let pos = Math.max(3, Math.min(97, 50 + (x.nota_compra - x.nota_venda) / 2));
-  if (x.estado === "aguardar") pos = Math.max(38, Math.min(62, pos));   // o ponteiro acompanha o veredito
-  const motivos = x.motivos.map(traduzir).slice(0, 3);
-  const ref = x.voltar_ate ? `<div class="linha"><span>⏳ Esperar voltar para</span><b>perto de ${dinheiro(x.voltar_ate)}</b></div>`
-    : x.referencia ? (x.referencia.tipo === "zona de compra"
-      ? `<div class="linha"><span>💵 Preço bom para comprar</span><b>até ${dinheiro(x.referencia.preco)}</b></div>`
-      : `<div class="linha"><span>💰 Preço bom para vender</span><b>a partir de ${dinheiro(x.referencia.preco)}</b></div>`) : "";
-  const L = x.local, onde = L ? (L.esticado ? [`esticado${L.subida7_pct >= 5 ? ` (subiu ${pct(L.subida7_pct, 0)} em 7 dias)` : ""}`, "neg"]
-      : L.v >= 0.65 ? ["com desconto", "pos"] : L.v >= 0.4 ? ["preço médio", "fr"] : ["caro no curto prazo", "neg"]) : null;
-  const lugar = onde ? `<div class="linha"><span>📍 Preço agora está</span><b class="${onde[1]}">${onde[0]}</b></div>` : "";
-  const dg = dinheiroGrande(m);
-  const grande = dg ? `<div class="linha"><span>🐋 Dinheiro grande agora</span><b class="${dg[1]}">${dg[0]}</b></div>` : "";
-  const minha = tem ? `<div class="linha"><span>💼 Sua posição</span><b class="${m.pnl >= 0 ? "pos" : "neg"}">${m.pnl >= 0 ? "ganhando" : "perdendo"} ${pct(Math.abs(m.pnl_pct)).replace("+", "")} (${usd(m.pnl)})</b></div>` : "";
-  const mudando = x.mudando_para ? `<div class="fr" style="font-size:13px;margin-top:6px">⏳ Pode mudar em instantes (confirmando nova leitura)…</div>` : "";
-  const aberto = abertos.has(m.simbolo);
+  const topo = `<div class="topo"><div class="nome"><i class="bola" style="background:${cor}"></i>${m.nome}<small>${NOMES[m.nome] || ""}</small></div>
+    <div class="preco">${dinheiro(m.preco)}<small class="${m.variacao_24h >= 0 ? "pos" : "neg"}">${pct(m.variacao_24h)}</small></div></div>`;
+  if (!x) return `<div class="card">${topo}<div class="veredito t-neutro"><i></i>Analisando…</div></div>`;
+  const S = SIMPLES[x.estado], tem = m.quantidade > 0 && m.preco_medio > 0, aberto = abertos.has(m.simbolo);
+  const motivo = x.motivos.length ? traduzir(x.motivos[x.voltar_ate ? x.motivos.length - 1 : 0]) : "";
+  const minha = tem ? `<div class="minha">Sua posição: <b class="${m.pnl >= 0 ? "pos" : "neg"}">${pct(m.pnl_pct, 1)}</b> <span class="fr">(${usd(m.pnl)})</span></div>` : "";
   return `<div class="card">${topo}
-    <div class="veredito v-${x.tom}"><div class="emo">${S.emo}</div><div><div class="txt">${S.txt}</div><div class="sub">${x.voltar_ate ? "Não corra atrás do preço: espere ele voltar." : subtitulo(x.estado, tem)}</div></div></div>
-    ${mudando}
-    <div class="termo"><div class="barra"><div class="marca" style="left:${pos}%"></div></div><div class="rot"><span>vender</span><span>esperar</span><span>comprar</span></div></div>
-    <ul class="porque">${motivos.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
-    ${lugar}${grande}${ref}${minha}
-    <button class="btn" onclick="alternar('${m.simbolo}')">${aberto ? "Fechar plano ▴" : "Ver plano ▾"}</button>
+    <div class="veredito t-${x.tom}"><i></i>${S.txt}</div>
+    <div class="acao">${acaoTexto(x, tem)}</div>
+    ${motivo && !x.voltar_ate && x.estado !== "aguardar" ? `<div class="motivo">${esc(maiuscula(motivo))}</div>` : ""}
+    ${x.mudando_para ? `<div class="motivo">Pode mudar em instantes…</div>` : ""}
+    ${minha}
+    <div class="rodape"><button class="det-btn" onclick="alternar('${m.simbolo}')">${aberto ? "Fechar ▴" : "Detalhes ▾"}</button></div>
     ${aberto ? planoHTML(m) : ""}</div>`;
 }
 function alternar(s) { abertos.has(s) ? abertos.delete(s) : abertos.add(s); render(); }

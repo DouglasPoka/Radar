@@ -279,24 +279,42 @@ async function historicoCompleto(s, maximo = 3500) {
   }
   return v;
 }
+// histórico de funding (média por dia, em % por período), guardado no celular e atualizado só no pedaço novo
+async function historicoFunding(s) {
+  const k = "radar_fund_" + s, c = ls.get(k, null) || {dias: {}, ate: 0};
+  let ini = c.ate ? (Math.floor(c.ate / 864e5) - 1) * 864e5 : Date.UTC(2019, 8, 1);
+  const acum = {};
+  for (let r = 0; r < 15; r++) {
+    const l = await http(BN.fut + "/fapi/v1/fundingRate", {symbol: s, startTime: ini, limit: 1000});
+    if (!Array.isArray(l) || !l.length) break;
+    for (const f of l) { const d = Math.floor(+f.fundingTime / 864e5); (acum[d] ||= [0, 0]); acum[d][0] += +f.fundingRate * 100; acum[d][1]++; }
+    c.ate = +l[l.length - 1].fundingTime; ini = c.ate + 1;
+    if (l.length < 1000) break; await dormir(120);
+  }
+  for (const [d, [a, n]] of Object.entries(acum)) c.dias[d] = +(a / n).toFixed(5);
+  if (!ls.set(k, c)) ls.del(k);
+  return c.dias;
+}
 function salvarLab() {
   const leve = {};
   for (const [s, r] of Object.entries(M.lab)) leve[s] = r;
-  if (!ls.set("radar_lab", {v: 3, ts: M.lab_atualizado, lab: leve})) ls.del("radar_lab");
+  if (!ls.set("radar_lab", {v: 4, ts: M.lab_atualizado, lab: leve})) ls.del("radar_lab");
 }
 async function rodadaLab(forcar = false) {
   const cache = ls.get("radar_lab", null);
   const simbolos = [...M.moedas.keys()];
-  if (!forcar && cache && cache.v === 3 && agoraS() - cache.ts < 6 * 3600 && simbolos.every(s => cache.lab[s] && cache.lab[s].pesos)) {
+  if (!forcar && cache && cache.v === 4 && agoraS() - cache.ts < 6 * 3600 && simbolos.every(s => cache.lab[s] && cache.lab[s].pesos)) {
     M.lab = cache.lab; M.lab_atualizado = cache.ts; M.status.lab = "ok";
   } else {
     M.status.lab = "calculando"; const erros = [], hist = {};
-    for (const s of simbolos) { try { hist[s] = C.converter(await historicoCompleto(s)); } catch (e) { erros.push(`${s}: ${e.message}`); } }
+    const fund = {};
+    for (const s of simbolos) { try { hist[s] = C.converter(await historicoCompleto(s)); } catch (e) { erros.push(`${s}: ${e.message}`); }
+      if (M.moedas.get(s)?.futuros_disponivel !== false) try { fund[s] = await historicoFunding(s); } catch (e) {} }
     const btc = hist.BTCUSDT; let xb = null;
     for (const s of Object.keys(hist).sort((a, b) => (a === "BTCUSDT" ? -1 : b === "BTCUSDT" ? 1 : 0))) {
       try {
         await dormir(30);
-        const r = s === "BTCUSDT" || !btc ? C.rodarLab(hist[s]) : C.rodarLab(hist[s], btc, xb);
+        const r = s === "BTCUSDT" || !btc ? C.rodarLab(hist[s], null, null, fund[s], s === "BTCUSDT") : C.rodarLab(hist[s], btc, xb, fund[s], false);
         if (s === "BTCUSDT") xb = r._x;
         delete r._x; M.lab[s] = r;
       } catch (e) { erros.push(`${s}: ${e.message}`); }
@@ -512,12 +530,35 @@ function filtroBtcAoVivo() {
   const ok = r.alta >= r.baixa;
   return {ok, texto: ok ? "BTC favorável (regime não está em baixa)" : `BTC em baixa (${r.baixa}% de chance): cuidado com compras de altcoins`};
 }
+// ------------------------------------------------------------ placar ao vivo: cada sinal mostrado fica registrado e é conferido depois
+function registrarPlacar(s, est, preco) {
+  const L = ls.get("radar_placar", []), ult = [...L].reverse().find(r => r.s === s);
+  if (ult && ult.e === est) return;
+  L.push({s, e: est, p: preco, t: Math.floor(agoraS())}); ls.set("radar_placar", L.slice(-500));
+}
+function placarResumo() {
+  const L = ls.get("radar_placar", []), agora = agoraS(), out = {};
+  for (const r of L) {
+    if (!C.ESTADOS[r.e] || r.e === "aguardar") continue;
+    const e = M.moedas.get(r.s), d1 = e?.ciclo?._diarias; if (!e) continue;
+    const o = out[r.s] ||= {sinais: 0, ac7: 0, av7: 0, ac30: 0, av30: 0, pendentes: 0, ultimos: []};
+    const lado = C.ESTADOS[r.e].ordem > 0 ? 1 : -1; o.sinais++;
+    const precoEm = t => { const c = (d1 || []).find(v => v.t >= t - 43200); return c && c.t + 86400 <= agora ? c.c : (t <= agora ? e.preco : null); };
+    const r7 = r.t + 7 * 86400 <= agora ? precoEm(r.t + 7 * 86400) : null, r30 = r.t + 30 * 86400 <= agora ? precoEm(r.t + 30 * 86400) : null;
+    if (r7) { o.av7++; if (lado * (r7 - r.p) > 0) o.ac7++; } else o.pendentes++;
+    if (r30) { o.av30++; if (lado * (r30 - r.p) > 0) o.ac30++; }
+    o.ultimos.unshift({e: r.e, p: r.p, t: r.t, r7: r7 ? (r7 / r.p - 1) * 100 : null, r30: r30 ? (r30 / r.p - 1) * 100 : null});
+  }
+  for (const o of Object.values(out)) o.ultimos = o.ultimos.slice(0, 8);
+  return out;
+}
 function atualizarSinais(guardar) {
   const medo = M.externo.medo?.valor ?? null;
   for (const [s, e] of M.moedas) {
     if (!e.ciclo || !e.preco) continue;
     let novo; try { novo = C.avaliar(estadoMoeda(e), medo, s === "BTCUSDT"); } catch (err) { continue; }
     const [exib, mudou] = M.estab.aplicar(s, novo); M.sinais[s] = exib;
+    if (!exib.mudando_para) try { registrarPlacar(s, exib.estado, e.preco); } catch (err) {}
     if (mudou) { const o = C.ESTADOS[novo.estado].ordem, nome = s.replace("USDT", "");
       const amigavel = {compra: `🟢 ${nome}: bom momento para comprar.`, perto_compra: `🟡 ${nome}: quase bom para comprar.`,
         aguardar: `⚪ ${nome}: voltou para "esperar".`, perto_venda: `🟠 ${nome}: bom para vender uma parte.`,
@@ -530,7 +571,7 @@ function atualizarSinais(guardar) {
 }
 
 // ------------------------------------------------------------ estado para o painel (mesmo formato do PC)
-function estadoMoeda(e) {
+function estadoMoeda(e, PL) {
   const [p, mot] = e.pontuacao(), pnl = e.pnl, ciclo = e.ciclo || {}, sup = ciclo.suportes || {}, n = nomeHL(e.simbolo);
   const f = M.forca[e.simbolo]; let fb = null; if (f) { const {serie, ...resto} = f; fb = resto; }
   return {
@@ -551,6 +592,7 @@ function estadoMoeda(e) {
     pesos: M.lab[e.simbolo]?.pesos || null,
     opcoes: M.externo.opcoes[n] || null, mapa_liq: M.mapas[e.simbolo] ? {...M.mapas[e.simbolo], faixas: undefined} : null,
     stable: M.externo.stable, corretoras: e.fluxo.porCorretora(),
+    rigor: M.lab[e.simbolo]?.decisao?.rigor || 0, decisao: M.lab[e.simbolo]?.decisao || null, placar_radar: PL ? PL[e.simbolo] || null : undefined,
   };
 }
 function conclusao(moedas) {
@@ -576,7 +618,8 @@ function conclusao(moedas) {
   return {titulo: med > 15 ? "Mercado com viés comprador" : med < -15 ? "Mercado com viés vendedor" : "Mercado sem direção clara", texto: t};
 }
 function estado() {
-  const moedas = [...M.moedas.values()].map(estadoMoeda), {baleias_hl, hl_mercado, opcoes, ...ext} = M.externo;
+  let PL = {}; try { PL = placarResumo(); } catch (e) {}
+  const moedas = [...M.moedas.values()].map(e => estadoMoeda(e, PL)), {baleias_hl, hl_mercado, opcoes, ...ext} = M.externo;
   return {agora: agoraS(), status: M.status, sopr_atualizado: M.sopr_atualizado, lab_atualizado: M.lab_atualizado, externo: ext,
     sopr_proximo: M.sopr_atualizado ? M.sopr_atualizado + M.sopr_intervalo : null, janela_minutos: AJ.janela_minutos,
     moedas, conclusao: conclusao(moedas), alertas: [...M.alertas].slice(-80).reverse(), versao_celular: true};

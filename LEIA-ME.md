@@ -31,10 +31,30 @@ Ela só precisa ficar hospedada em algum lugar para você abrir pelo link. Vamos
 
 ## Duas telas
 
-- **Tela inicial (simples)**: o clima do mercado e um cartão por moeda dizendo, em português do dia a
-  dia, se é hora de 🟢 comprar, 🟡 quase, ⚪ esperar, 🟠 vender uma parte ou 🔴 vender uma parte e evitar
-  compras — com o porquê, os preços de referência e um plano simples ("Ver plano").
+- **Tela inicial (limpa)**: o clima do mercado em uma linha e um cartão por moeda com só o essencial:
+  o veredito (🟢 comprar, 🟡 quase, ⚪ esperar, 🟠 vender uma parte, 🔴 hora de vender uma parte), uma
+  frase dizendo o que fazer e, quando faz sentido, o motivo principal. Toque em **Detalhes** para ver
+  o que pesa a favor e contra, o plano (compra em partes, saída e alvos) e **se o radar funciona
+  nessa moeda**. O "?" no topo explica as cores.
 - **📊 Modo completo** (botão na barra de baixo): o painel com todos os indicadores, gráficos e o Laboratório.
+
+## Como o radar mede o próprio acerto
+
+- **Decisão final testada no histórico**: o Laboratório refaz o sinal inteiro dia a dia no passado
+  (só com o que se sabia em cada dia) e simula seguir o radar, com taxas e saída, contra só comprar e
+  segurar. Também mostra quantas vezes cada veredito acertou a direção em 7 e 30 dias.
+- **Ajuste por moeda**: com esse teste o radar escolhe para cada moeda quão exigente ser e a distância
+  da saída (o "Sair se fechar abaixo de" do plano). Escolhe nos primeiros 70% do histórico e só mantém
+  se também funcionar nos 30% finais, que o ajuste nunca viu.
+- **Gatilho de virada**: com o preço barato, o radar só indica compra quando a queda para de verdade
+  (fecha acima da máxima dos 3 dias anteriores ou o SOPR volta acima de 1). Evita "pegar a faca caindo".
+- **Funding no Laboratório**: o histórico de anos do funding (aposta alavancada na alta ou na queda)
+  também é testado por moeda e ajusta o peso desse fator.
+- **Placar ao vivo**: cada sinal que aparece no seu celular fica registrado e é conferido 7 e 30 dias
+  depois. O resultado aparece no topo da tela inicial ("Placar do radar") e nos Detalhes de cada moeda.
+
+O que não tem histórico gratuito (baleias, fluxo ao vivo, opções, liquidações) fica de fora do teste
+do passado, e por isso o placar ao vivo é a medida mais completa com o tempo.
 
 ## Indicadores do "dinheiro grande"
 
