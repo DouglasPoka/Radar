@@ -411,6 +411,20 @@ function forcaVsBtc(alt, btc) {
   return {var7_pct: vr(7), var30_pct: v30, var90_pct: vr(90), acima_media50: acima, texto: txt, tom,
     serie: serie.slice(-365).map(([t, x]) => ({t, razao: x}))};
 }
+// ------------------------------------------------------------ ONDE O PREÇO ESTÁ (barato x esticado)
+// Junta 4 medidas simples. 1 = preço com desconto; 0 = preço esticado depois de uma alta rápida.
+//   subida: quantas "volatilidades diárias" (ATR) o preço andou nos últimos 7 dias
+//   pvc: distância do custo médio de curto prazo (%)   rsi: RSI diário   pos90: posição na faixa de 90 dias (0 = mínima, 1 = máxima)
+function localPreco({subida, pvc, rsi, pos90}) {
+  const partes = [];
+  if (subida != null) partes.push(lim01(1 - subida / 3));
+  if (pvc != null) partes.push(lim01(1 - pvc / 20));
+  if (rsi != null) partes.push(lim01((70 - rsi) / 35));
+  if (pos90 != null) partes.push(lim01(1 - pos90));
+  if (!partes.length) return null;
+  const esticado = (subida != null && subida >= 2.5) || (rsi != null && rsi >= 70) || (pvc != null && pvc >= 25);
+  return {v: media(partes), esticado};
+}
 function analisarMoeda(kl1d, kl4h) {
   const d1 = converter(kl1d), h4 = converter(kl4h), sem = agrupar(d1, "w"), mes = agrupar(d1, "m");
   const diario = analisarTimeframe(d1, 3, 155, 730);
@@ -433,7 +447,8 @@ function analisarMoeda(kl1d, kl4h) {
     resumo: {sopr7: s7a, sopr_dia: ult(s1), limites7: lim7, comportamento: texto, tom,
       custo_curto_prazo: custoAtual, preco_vs_custo_pct: custoAtual ? (fim.c / custoAtual - 1) * 100 : null,
       historico_dias: d1.length, atr14: atr, atr14_pct: atr && fim ? atr / fim.c * 100 : null,
-      max90: ult90.length ? Math.max(...ult90.map(v => v.h)) : null, min90: ult90.length ? Math.min(...ult90.map(v => v.l)) : null},
+      max90: ult90.length ? Math.max(...ult90.map(v => v.h)) : null, min90: ult90.length ? Math.min(...ult90.map(v => v.l)) : null,
+      fech7: d1.length > 8 ? d1[d1.length - 8].c : null, rsi_d: rsi(d1.slice(-200).map(v => v.c))},
     extremos: diasExtremos(d1, s1),
     suportes: perfilVolume(h4.slice(-540), fim ? fim.c : 0),
     _diarias: d1,
@@ -464,7 +479,15 @@ function preparar(d1) {
   const regime = Array(n).fill(null);
   for (let i = 90; i < n; i++) if (s7[i] != null && custo[i] != null)
     regime[i] = regimeProvavel(d1.slice(Math.max(0, i - 120), i + 1), s7[i], {p5: p5[i], p95: p95[i]}, 0, null, custo[i]);
-  return {d1, fech, s7, custo, p5, p95, p85, rsi: r, sma50, regime};
+  const atrp = Array(n).fill(null), local = Array(n).fill(null);
+  for (let i = 15; i < n; i++) {
+    let t = 0; for (let k = i - 13; k <= i; k++) t += Math.max(d1[k].h, fech[k - 1]) - Math.min(d1[k].l, fech[k - 1]);
+    atrp[i] = t / 14 / fech[i];
+    if (i >= 90) { const j = d1.slice(i - 89, i + 1), hi = Math.max(...j.map(v => v.h)), lo = Math.min(...j.map(v => v.l));
+      local[i] = localPreco({subida: (fech[i] / fech[i - 7] - 1) / atrp[i], pvc: custo[i] ? (fech[i] / custo[i] - 1) * 100 : null,
+        rsi: r[i], pos90: hi > lo ? (fech[i] - lo) / (hi - lo) : null}); }
+  }
+  return {d1, fech, s7, custo, p5, p95, p85, rsi: r, sma50, regime, atrp, local};
 }
 const um = n => Array(n).fill(1);
 const cruzouAcima = (a, b, i) => i > 0 && a[i] != null && a[i - 1] != null && b[i] != null && b[i - 1] != null && a[i - 1] < b[i - 1] && a[i] >= b[i];
@@ -484,6 +507,10 @@ const SINAIS = [
     f: (x, i) => x.rsi[i] != null && x.rsi[i] < 30},
   {id: "regime_alta", tipo: "compra", nome: "Regime de alta dominante", desc: "O regime provável (sem o fluxo ao vivo) passa a ter 50% ou mais de alta.",
     f: (x, i) => x.regime[i] != null && x.regime[i].alta >= 50},
+  {id: "desconto", tipo: "compra", nome: "Preço com desconto", desc: "Preço perto da parte de baixo da faixa de 90 dias, sem alta rápida recente e sem RSI esticado.",
+    f: (x, i) => x.local[i] != null && x.local[i].v >= 0.65 && (i === 0 || x.local[i - 1] == null || x.local[i - 1].v < 0.65)},
+  {id: "esticado", tipo: "venda", nome: "Alta rápida demais (preço esticado)", desc: "Subiu 2,5 vezes a volatilidade diária em 7 dias, ou RSI diário acima de 70, ou 25% acima do custo de curto prazo. Testa se comprar depois de uma alta forte costuma dar errado.",
+    f: (x, i) => x.local[i] != null && x.local[i].esticado && (i === 0 || !x.local[i - 1]?.esticado)},
   {id: "euforia", tipo: "venda", nome: "Lucro extremo no SOPR", desc: "SOPR 7d no nível de lucro extremo (5% mais altos do último ano): muita gente realizando lucro.",
     f: (x, i) => x.s7[i] != null && x.p95[i] != null && x.s7[i] >= x.p95[i]},
   {id: "sopr_perde", tipo: "venda", nome: "SOPR perde 1", desc: "O SOPR 7d estava acima de 1 e caiu para baixo: compradores recentes começam a vender no prejuízo.",
@@ -578,7 +605,8 @@ function spearman(x, y) {
   return dx && dy ? num / Math.sqrt(dx * dy) : null;
 }
 const NOMES_FATORES = {sopr_c: "SOPR (sinal de compra)", sopr_v: "SOPR (sinal de venda)", regime_c: "Tendência (compra)", regime_v: "Tendência (venda)",
-  btc_c: "Filtro do BTC (compra)", btc_v: "BTC em baixa (venda)", forca_c: "Força contra o BTC"};
+  btc_c: "Filtro do BTC (compra)", btc_v: "BTC em baixa (venda)", forca_c: "Força contra o BTC",
+  local_c: "Preço com desconto (compra)", local_v: "Preço esticado (venda)"};
 function calibrarPesos(x, xb) {
   const n = x.fech.length, H = 30, ser = {};
   for (const k of Object.keys(NOMES_FATORES)) ser[k] = Array(n).fill(null);
@@ -601,6 +629,7 @@ function calibrarPesos(x, xb) {
     if (r) { ser.regime_c[i] = lim01((r.alta - r.baixa + 30) / 60); ser.regime_v[i] = lim01((r.baixa - r.alta + 30) / 60); }
     if (filtro && x.regime[i]) { ser.btc_c[i] = filtro[i] ? 1 : 0; ser.btc_v[i] = filtro[i] ? 0 : 1; }
     if (forcaTom && forcaTom[i] != null) ser.forca_c[i] = forcaTom[i];
+    if (x.local[i]) { ser.local_c[i] = x.local[i].v; ser.local_v[i] = 1 - x.local[i].v; }
   }
   const fut = x.fech.map((c, i) => (i + H < n ? (x.fech[i + H] / c - 1) * 100 : null));
   const out = {};
@@ -743,8 +772,7 @@ function niveis(m) {
   let sup = ((m.suportes || {}).suportes || []).map(x => x.preco), res = ((m.suportes || {}).resistencias || []).map(x => x.preco);
   const c = s.custo_curto_prazo;
   if (c) (c < p ? sup : res).push(c);
-  if (m.parede_compra) sup.push(m.parede_compra[0]);
-  if (m.parede_venda) res.push(m.parede_venda[0]);
+  // paredes do livro ficam de fora: estão sempre coladas no preço e faziam qualquer preço parecer "no suporte"
   if (s.max90) res.push(s.max90);
   return [sup.filter(x => x < p).sort((a, b) => b - a), res.filter(x => x > p).sort((a, b) => a - b), s.atr14];
 }
@@ -763,6 +791,15 @@ function avaliar(m, medo, ehBtc) {
     C_(20, v, v >= 0.6 ? "SOPR em capitulação/prejuízo: vendedores desistindo" : null, "sopr_c");
     const vv = ({lucro_extremo: 1, lucro_forte: 0.75, lucro: 0.35})[tom] ?? 0;
     V_(25, vv, vv >= 0.75 ? "SOPR em realização forte/euforia" : null, "sopr_v");
+  }
+  // onde o preço está: com desconto ou esticado depois de subir rápido
+  const pos90 = s.max90 && s.min90 && s.max90 > s.min90 && p ? lim01((p - s.min90) / (s.max90 - s.min90)) : null;
+  const subidaPct = p && s.fech7 ? (p / s.fech7 - 1) * 100 : null;
+  const loc = localPreco({subida: subidaPct != null && s.atr14_pct ? subidaPct / s.atr14_pct : null,
+    pvc: p && s.custo_curto_prazo ? (p / s.custo_curto_prazo - 1) * 100 : pvc, rsi: s.rsi_d ?? null, pos90});
+  if (loc) {
+    C_(20, loc.v, loc.v >= 0.65 ? "preço com desconto (perto da parte de baixo dos últimos 90 dias)" : null, "local_c");
+    V_(10, loc.esticado ? 1 : lim01(0.6 - loc.v), loc.esticado ? (subidaPct != null && subidaPct >= 8 ? `subiu ${pyRound(subidaPct)}% em 7 dias: preço esticado` : "preço esticado no curto prazo") : null, "local_v");
   }
   const prox = d => (d <= 0.5 ? 1 : d <= 1 ? 0.6 : d <= 2 ? 0.25 : 0);
   if (p && sup.length) { const v = prox((p - sup[0]) / atr); C_(15, v, v >= 0.6 ? `preço encostado no suporte ${fmtPreco(sup[0])}` : null, "suporte_c"); }
@@ -835,15 +872,27 @@ function avaliar(m, medo, ehBtc) {
   else if (nv >= 58 && nv - nc >= 15) estado = "perto_venda";
   else estado = "aguardar";
   if (estado === "compra" && !ehBtc && fl && !fl.ok) { estado = "perto_compra"; trava = "BTC em baixa: rebaixado de ZONA DE COMPRA"; }
+  // trava de preço: nunca indicar compra logo depois de uma alta rápida (correr atrás do preço)
+  let voltarAte = null;
+  if (loc && (estado === "compra" || estado === "perto_compra")) {
+    const alvo = sup.find(x => p - x >= atr) ?? sup[0] ?? null;
+    if (loc.esticado || loc.v < 0.4) {
+      estado = "aguardar"; voltarAte = alvo;
+      trava = (subidaPct != null && subidaPct >= 5 ? `subiu ${pyRound(subidaPct)}% em 7 dias` : "preço esticado / longe de um ponto de desconto") +
+        ": o momento é bom, mas não vale correr atrás do preço" + (alvo ? `. Melhor esperar voltar para perto de US$ ${fmtPreco(alvo)}` : "");
+    } else if (estado === "compra" && loc.v < 0.55) { estado = "perto_compra"; trava = "preço ainda não está com desconto: rebaixado de ZONA DE COMPRA"; }
+  }
   const ordem = ESTADOS[estado].ordem, lado = ordem > 0 ? compra : ordem < 0 ? venda : [];
   let motivos = [...lado].sort((a, b) => b[0] * (b[1] || 0) - a[0] * (a[1] || 0)).filter(x => x[2]).map(x => x[2]).slice(0, 4);
-  if (estado === "aguardar") motivos = [Math.abs(nc - nv) < 15 ? "compra e venda equilibradas" : nc > nv ? "leve viés de compra, sem confirmação" : "leve viés de venda, sem confirmação"];
+  if (estado === "aguardar" && !voltarAte) motivos = [Math.abs(nc - nv) < 15 ? "compra e venda equilibradas" : nc > nv ? "leve viés de compra, sem confirmação" : "leve viés de venda, sem confirmação"];
   if (trava) motivos.push(trava);
   const disp = [...compra, ...venda].filter(x => x[1] != null).length;
   const labOk = (ordem > 0 && bc.length > 0) || (ordem < 0 && bv.length > 0), dif = Math.abs(nc - nv);
   const confianca = dif >= 35 && disp >= 14 && labOk ? "alta" : dif >= 20 ? "média" : "baixa";
   let referencia = null;
-  if (ordem >= 0 && sup.length) referencia = {tipo: "zona de compra", preco: sup[0]};
+  if (!voltarAte && loc?.esticado && ordem >= 0) voltarAte = sup.find(x => p - x >= atr) ?? null;   // esticado: nunca apontar um "preço bom" colado no preço atual
+  if (voltarAte) referencia = {tipo: "esperar voltar até", preco: voltarAte};
+  else if (ordem >= 0 && sup.length) referencia = {tipo: "zona de compra", preco: sup[0]};
   else if (res.length) referencia = {tipo: "zona de realização", preco: res[0]};
   const pos = (m.quantidade || 0) > 0;
   const acao = {compra: "Condições a favor de comprar (de preferência em partes — veja a aba Plano).",
@@ -851,7 +900,8 @@ function avaliar(m, medo, ehBtc) {
     aguardar: "Sem vantagem clara agora. Melhor esperar.",
     perto_venda: pos ? "Considere realizar uma parte do lucro." : "Evite comprar agora.",
     venda: pos ? "Bom momento para realizar parte da posição." : "Evite comprar agora: risco de correção."}[estado];
-  return {estado, ...ESTADOS[estado], nota_compra: nc, nota_venda: nv, motivos, confianca, referencia, acao};
+  return {estado, ...ESTADOS[estado], nota_compra: nc, nota_venda: nv, motivos, confianca, referencia, acao: voltarAte ? `Não corra atrás do preço: espere voltar para perto de US$ ${fmtPreco(voltarAte)}.` : acao,
+    local: loc ? {v: loc.v, esticado: loc.esticado, subida7_pct: subidaPct} : null, voltar_ate: voltarAte};
 }
 class Estabilizador {
   constructor(n = 4) { this.n = n; this.atual = {}; this.cand = {}; }
@@ -868,7 +918,7 @@ class Estabilizador {
 
 const API = {pyRound, br, fmtUsd, fmtPreco, media, Janela, EstadoMoeda, leituraTexto, rsi, converter, agrupar, soprSerie,
   mediaPonderadaMovel, custoCurtoPrazo, percentil, classificar, analisarTimeframe, diasExtremos, perfilVolume, regimeProvavel,
-  forcaVsBtc, analisarMoeda, preparar, calibrarPesos, analisarOpcoes, mapaLiquidacoes, analisarStablecoins, spearman, Absorcao, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
+  forcaVsBtc, localPreco, analisarMoeda, preparar, calibrarPesos, analisarOpcoes, mapaLiquidacoes, analisarStablecoins, spearman, Absorcao, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
 if (typeof module !== "undefined" && module.exports) module.exports = API;
 else raiz.Calc = API;
 })(typeof window !== "undefined" ? window : globalThis);

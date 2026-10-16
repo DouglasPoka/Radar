@@ -398,6 +398,7 @@ function cartaoSinal(m){
     <div class="notas"><span>Compra</span><div class="trilho"><div style="width:${x.nota_compra}%;background:var(--verde)"></div></div><b>${x.nota_compra}</b></div>
     <div class="notas"><span>Venda</span><div class="trilho"><div style="width:${x.nota_venda}%;background:var(--verm)"></div></div><b>${x.nota_venda}</b></div>
     <div style="font-size:13px;margin-top:8px">${esc(x.acao)}</div>
+    ${x.local?`<div class="fr" style="font-size:12px;margin-top:4px">preço ${x.local.esticado?"esticado":x.local.v>=0.65?"com desconto":x.local.v>=0.4?"no meio":"caro no curto prazo"} (nota de desconto ${Math.round(x.local.v*100)}/100${x.local.subida7_pct!=null?`, ${pc(x.local.subida7_pct)} em 7 dias`:""})</div>`:""}
     ${x.referencia?`<div class="fr" style="font-size:12px;margin-top:4px">${esc(x.referencia.tipo)}: <b style="color:var(--texto)">${fp(x.referencia.preco)}</b> (${pc((x.referencia.preco/m.preco-1)*100)})</div>`:""}
     <ul>${x.motivos.map(t=>`<li>${esc(t)}</li>`).join("")}</ul></div>`;
 }

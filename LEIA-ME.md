@@ -60,6 +60,13 @@ Ela só precisa ficar hospedada em algum lugar para você abrir pelo link. Vamos
 - **Stablecoins (USDT + USDC)**: quando o total cresce, há dinheiro novo pronto para comprar cripto;
   quando cai, dinheiro saindo. Atualiza a cada 6 horas.
 
+- **Onde o preço está (trava contra "correr atrás do preço")**: junta a alta dos últimos 7 dias, o
+  RSI diário, a distância do custo médio e a posição na faixa de 90 dias. Se a moeda acabou de subir
+  rápido, o radar **não indica compra**, mesmo com o resto positivo: mostra "⏳ Esperar voltar para" um
+  preço de suporte de verdade. Na tela inicial aparece em "📍 Preço agora está" (com desconto, preço
+  médio, caro no curto prazo ou esticado). O Laboratório testa isso no histórico de cada moeda
+  ("Preço com desconto" e "Alta rápida demais").
+
 Tudo isso entra na decisão da tela inicial e aparece em "🐋 Dinheiro grande agora" e no "Ver plano".
 
 ## Bateria

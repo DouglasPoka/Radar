@@ -247,7 +247,7 @@ function planoHTML(m) {
   let h = "";
   if (x && ["compra", "perto_compra", "aguardar"].includes(x.estado)) {
     h += `<h4>🛒 Se for comprar, divida em 3 partes</h4>
-      <div class="passo"><span>1ª parte (30%) — agora</span><b>${dinheiro(entradas[0])}</b></div>
+      <div class="passo"><span>1ª parte (30%) — ${x.voltar_ate ? "se voltar até" : "agora"}</span><b>${dinheiro(x.voltar_ate || entradas[0])}</b></div>
       <div class="passo"><span>2ª parte (30%) — se cair até</span><b>${dinheiro(entradas[1])}</b></div>
       <div class="passo"><span>3ª parte (40%) — se cair até</span><b>${dinheiro(entradas[2])}</b></div>
       <p class="fr" style="font-size:13.5px;margin:6px 0 0">Comprar em partes protege você caso o preço continue caindo depois da primeira compra.</p>
@@ -314,22 +314,27 @@ function cartao(m) {
     <div class="preco">${dinheiro(m.preco)}<small class="${m.variacao_24h >= 0 ? "pos" : "neg"}">${m.variacao_24h >= 0 ? "▲" : "▼"} ${pct(m.variacao_24h)} hoje</small></div></div>`;
   if (!x) return `<div class="card">${topo}<div class="veredito v-neutro"><div class="emo">⏳</div><div><div class="txt">Analisando…</div><div class="sub">Calculando os indicadores desta moeda.</div></div></div></div>`;
   const S = SIMPLES[x.estado], tem = m.quantidade > 0 && m.preco_medio > 0;
-  const pos = Math.max(3, Math.min(97, 50 + (x.nota_compra - x.nota_venda) / 2));
+  let pos = Math.max(3, Math.min(97, 50 + (x.nota_compra - x.nota_venda) / 2));
+  if (x.estado === "aguardar") pos = Math.max(38, Math.min(62, pos));   // o ponteiro acompanha o veredito
   const motivos = x.motivos.map(traduzir).slice(0, 3);
-  const ref = x.referencia ? (x.referencia.tipo === "zona de compra"
+  const ref = x.voltar_ate ? `<div class="linha"><span>⏳ Esperar voltar para</span><b>perto de ${dinheiro(x.voltar_ate)}</b></div>`
+    : x.referencia ? (x.referencia.tipo === "zona de compra"
       ? `<div class="linha"><span>💵 Preço bom para comprar</span><b>até ${dinheiro(x.referencia.preco)}</b></div>`
       : `<div class="linha"><span>💰 Preço bom para vender</span><b>a partir de ${dinheiro(x.referencia.preco)}</b></div>`) : "";
+  const L = x.local, onde = L ? (L.esticado ? [`esticado${L.subida7_pct >= 5 ? ` (subiu ${pct(L.subida7_pct, 0)} em 7 dias)` : ""}`, "neg"]
+      : L.v >= 0.65 ? ["com desconto", "pos"] : L.v >= 0.4 ? ["preço médio", "fr"] : ["caro no curto prazo", "neg"]) : null;
+  const lugar = onde ? `<div class="linha"><span>📍 Preço agora está</span><b class="${onde[1]}">${onde[0]}</b></div>` : "";
   const dg = dinheiroGrande(m);
   const grande = dg ? `<div class="linha"><span>🐋 Dinheiro grande agora</span><b class="${dg[1]}">${dg[0]}</b></div>` : "";
   const minha = tem ? `<div class="linha"><span>💼 Sua posição</span><b class="${m.pnl >= 0 ? "pos" : "neg"}">${m.pnl >= 0 ? "ganhando" : "perdendo"} ${pct(Math.abs(m.pnl_pct)).replace("+", "")} (${usd(m.pnl)})</b></div>` : "";
   const mudando = x.mudando_para ? `<div class="fr" style="font-size:13px;margin-top:6px">⏳ Pode mudar em instantes (confirmando nova leitura)…</div>` : "";
   const aberto = abertos.has(m.simbolo);
   return `<div class="card">${topo}
-    <div class="veredito v-${x.tom}"><div class="emo">${S.emo}</div><div><div class="txt">${S.txt}</div><div class="sub">${subtitulo(x.estado, tem)}</div></div></div>
+    <div class="veredito v-${x.tom}"><div class="emo">${S.emo}</div><div><div class="txt">${S.txt}</div><div class="sub">${x.voltar_ate ? "Não corra atrás do preço: espere ele voltar." : subtitulo(x.estado, tem)}</div></div></div>
     ${mudando}
     <div class="termo"><div class="barra"><div class="marca" style="left:${pos}%"></div></div><div class="rot"><span>vender</span><span>esperar</span><span>comprar</span></div></div>
     <ul class="porque">${motivos.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
-    ${grande}${ref}${minha}
+    ${lugar}${grande}${ref}${minha}
     <button class="btn" onclick="alternar('${m.simbolo}')">${aberto ? "Fechar plano ▴" : "Ver plano ▾"}</button>
     ${aberto ? planoHTML(m) : ""}</div>`;
 }

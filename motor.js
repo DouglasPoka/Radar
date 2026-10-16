@@ -282,12 +282,12 @@ async function historicoCompleto(s, maximo = 3500) {
 function salvarLab() {
   const leve = {};
   for (const [s, r] of Object.entries(M.lab)) leve[s] = r;
-  if (!ls.set("radar_lab", {ts: M.lab_atualizado, lab: leve})) ls.del("radar_lab");
+  if (!ls.set("radar_lab", {v: 3, ts: M.lab_atualizado, lab: leve})) ls.del("radar_lab");
 }
 async function rodadaLab(forcar = false) {
   const cache = ls.get("radar_lab", null);
   const simbolos = [...M.moedas.keys()];
-  if (!forcar && cache && agoraS() - cache.ts < 6 * 3600 && simbolos.every(s => cache.lab[s] && cache.lab[s].pesos)) {
+  if (!forcar && cache && cache.v === 3 && agoraS() - cache.ts < 6 * 3600 && simbolos.every(s => cache.lab[s] && cache.lab[s].pesos)) {
     M.lab = cache.lab; M.lab_atualizado = cache.ts; M.status.lab = "ok";
   } else {
     M.status.lab = "calculando"; const erros = [], hist = {};
