@@ -56,6 +56,7 @@ const hlPost = corpo => http(HL_INFO, null, {method: "POST", headers: {"Content-
 
 // ------------------------------------------------------------ estado do motor
 const M = {
+  regras: {}, regras_tentou: false,
   inicio: Date.now() / 1000,
   moedas: new Map(), status: {spot: "conectando", futuros: "conectando", corretoras: "aguardando", indicadores: "aguardando", sopr: "aguardando", lab: "aguardando", externo: "aguardando"},
   sopr_atualizado: 0, sopr_intervalo: 3600, lab: {}, lab_atualizado: 0, lab_vivo: {dias: 0, moedas: {}},
@@ -93,7 +94,7 @@ function emitir(simbolo, tipo, texto, {espera = 600, importante = true, tom = "n
   const k = simbolo + ":" + tipo, t = agoraS();
   if (t - (M.ultimoAviso[k] || 0) < espera) return;
   M.ultimoAviso[k] = t;
-  M.alertas.push({ts: t, hora: hm(), moeda: simbolo.replace("USDT", ""), tipo, texto, importante, tom});
+  M.alertas.push({ts: t, hora: hm(), moeda: simbolo.replace("USDT", ""), tipo, texto, importante, tom, amigavel: amigavel || null});
   M.alertas = M.alertas.slice(-200);
   ls.set("radar_alertas", M.alertas.slice(-80));
   if (!importante) return;
@@ -242,8 +243,39 @@ async function rodadaIndicadores() {
   const erros = [], comRsi = agoraS() - ultimoRsi > 300;
   for (const est of M.moedas.values()) { try { await atualizarMoeda(est, comRsi); } catch (e) { erros.push(`${est.simbolo}: ${e.message}`); } }
   if (comRsi && !erros.length) ultimoRsi = agoraS();
+  try { checarDiario(); } catch (e) {}
+  if (!Object.keys(M.regras).length && !M.regras_tentou) { M.regras_tentou = true; carregarRegras().catch(() => { M.regras_tentou = false; }); }
   M.status.indicadores = erros.length ? "erro: " + erros.join(" | ").slice(0, 150) : "ok";
   atualizarSinais();
+}
+
+// ------------------------------------------------------------ regras de ordem da Binance (casas decimais, mínimo)
+async function carregarRegras() {
+  const simb = [...M.moedas.keys()]; if (!simb.length) return;
+  const r = await http(BN.spot + "/api/v3/exchangeInfo", {symbols: JSON.stringify(simb)});
+  for (const x of r.symbols || []) {
+    const f = Object.fromEntries((x.filters || []).map(z => [z.filterType, z]));
+    M.regras[x.symbol] = {tick: +(f.PRICE_FILTER?.tickSize || 0), step: +(f.LOT_SIZE?.stepSize || 0), minQty: +(f.LOT_SIZE?.minQty || 0),
+      minNotional: +(f.NOTIONAL?.minNotional || f.MIN_NOTIONAL?.minNotional || 5)};
+  }
+}
+// ------------------------------------------------------------ diário: avisa quando uma operação aberta bate no stop ou num alvo
+function checarDiario() {
+  const D = ls.get("radar_diario", []); let mudou = false;
+  for (const op of D) {
+    const est = M.moedas.get(op.s), p = est?.preco; if (!p) continue;
+    const q = (op.compras || []).reduce((a, c) => a + c.qtd, 0) - (op.vendas || []).reduce((a, c) => a + c.qtd, 0);
+    if (q <= 1e-12) continue;
+    op.avisos ||= {}; const nome = op.s.replace("USDT", "");
+    if (op.stop && p < op.stop && !op.avisos.stop) { op.avisos.stop = true; mudou = true;
+      emitir(op.s, "diario_stop", `Sua operação em ${nome}: preço abaixo do stop (${C.fmtPreco(op.stop)})`, {espera: 0, importante: true, tom: "baixa",
+        amigavel: `🛑 ${nome}: o preço passou abaixo da sua saída (${C.fmtPreco(op.stop)}). Hora de seguir o plano.`}); }
+    if (op.stop && p > op.stop * 1.03 && op.avisos.stop) { op.avisos.stop = false; mudou = true; }
+    (op.alvos || []).forEach((a, k) => { if (a && p >= a && !op.avisos["a" + k]) { op.avisos["a" + k] = true; mudou = true;
+      emitir(op.s, "diario_alvo", `Sua operação em ${nome}: ${k + 1}º alvo atingido (${C.fmtPreco(a)})`, {espera: 0, importante: true, tom: "alta",
+        amigavel: `🎯 ${nome}: ${k + 1}º alvo atingido (${C.fmtPreco(a)}). Pelo plano, venda uma parte e registre no diário.`}); } });
+  }
+  if (mudou) ls.set("radar_diario", D);
 }
 
 // ------------------------------------------------------------ SOPR / ciclo
@@ -298,32 +330,47 @@ async function historicoFunding(s) {
 function salvarLab() {
   const leve = {};
   for (const [s, r] of Object.entries(M.lab)) leve[s] = r;
-  if (!ls.set("radar_lab", {v: 4, ts: M.lab_atualizado, lab: leve})) ls.del("radar_lab");
+  if (!ls.set("radar_lab", {v: 5, ts: M.lab_atualizado, lab: leve})) ls.del("radar_lab");
 }
 async function rodadaLab(forcar = false) {
   const cache = ls.get("radar_lab", null);
   const simbolos = [...M.moedas.keys()];
-  if (!forcar && cache && cache.v === 4 && agoraS() - cache.ts < 6 * 3600 && simbolos.every(s => cache.lab[s] && cache.lab[s].pesos)) {
+  if (!forcar && cache && cache.v === 5 && agoraS() - cache.ts < 6 * 3600 && simbolos.every(s => cache.lab[s] && cache.lab[s].pesos)) {
     M.lab = cache.lab; M.lab_atualizado = cache.ts; M.status.lab = "ok";
   } else {
     M.status.lab = "calculando"; const erros = [], hist = {};
     const fund = {};
     for (const s of simbolos) { try { hist[s] = C.converter(await historicoCompleto(s)); } catch (e) { erros.push(`${s}: ${e.message}`); }
       if (M.moedas.get(s)?.futuros_disponivel !== false) try { fund[s] = await historicoFunding(s); } catch (e) {} }
-    const btc = hist.BTCUSDT; let xb = null;
+    const btc = hist.BTCUSDT; let xb = null; const listaCap = [];
     for (const s of Object.keys(hist).sort((a, b) => (a === "BTCUSDT" ? -1 : b === "BTCUSDT" ? 1 : 0))) {
       try {
         await dormir(30);
         const r = s === "BTCUSDT" || !btc ? C.rodarLab(hist[s], null, null, fund[s], s === "BTCUSDT") : C.rodarLab(hist[s], btc, xb, fund[s], false);
         if (s === "BTCUSDT") xb = r._x;
+        listaCap.push({simbolo: s, x: r._x});
         delete r._x; M.lab[s] = r;
       } catch (e) { erros.push(`${s}: ${e.message}`); }
     }
+    try { const cap = C.capitulacaoTodas(listaCap); for (const [s, c] of Object.entries(cap)) if (M.lab[s]) M.lab[s].capitulacao = c; avisarCapitulacao(); }
+    catch (e) { erros.push("capitulação: " + e.message); }
     M.lab_atualizado = agoraS(); salvarLab();
     M.status.lab = erros.length ? "erro: " + erros.join(" | ").slice(0, 150) : "ok";
   }
   try { M.lab_vivo = await testeAoVivo(); } catch (e) {}
   atualizarSinais(true);
+}
+function avisarCapitulacao() {
+  const antes = ls.get("radar_cap_fases", {}), agora = {};
+  for (const [s, r] of Object.entries(M.lab)) {
+    const f = r.capitulacao?.fase; if (!f) continue; agora[s] = f; const nome = s.replace("USDT", "");
+    if (f === antes[s]) continue;
+    if (f === "alto") emitir(s, "cap_alto", `Capitulação: risco ALTO em ${nome} (chance de ${Math.round(r.capitulacao.chance)}% nas próximas 3 semanas)`,
+      {espera: 86400, importante: true, tom: "baixa", amigavel: `🌊 ${nome}: risco alto de capitulação nas próximas semanas. Guarde caixa e veja a zona provável.`});
+    if (f === "acontecendo") emitir(s, "cap_agora", `Capitulação acontecendo em ${nome}`,
+      {espera: 86400, importante: true, tom: "alta", amigavel: `🌊 ${nome}: capitulação acontecendo (vendedores desistindo). Região histórica de fundo; espere a virada para comprar.`});
+  }
+  ls.set("radar_cap_fases", agora);
 }
 function labDaMoeda(s) {
   const r = M.lab[s]; if (!r) return {};
@@ -572,6 +619,12 @@ function atualizarSinais(guardar) {
 
 // ------------------------------------------------------------ estado para o painel (mesmo formato do PC)
 function estadoMoeda(e, PL) {
+  const o = estadoMoedaBase(e, PL);
+  try { o.capitulacao = C.capAoVivo(M.lab[e.simbolo]?.capitulacao || null, o, M.externo.medo?.valor ?? null); } catch (err) { o.capitulacao = null; }
+  o.regras = M.regras[e.simbolo] || null;
+  return o;
+}
+function estadoMoedaBase(e, PL) {
   const [p, mot] = e.pontuacao(), pnl = e.pnl, ciclo = e.ciclo || {}, sup = ciclo.suportes || {}, n = nomeHL(e.simbolo);
   const f = M.forca[e.simbolo]; let fb = null; if (f) { const {serie, ...resto} = f; fb = resto; }
   return {
@@ -694,6 +747,10 @@ document.addEventListener("visibilitychange", () => {
 
 // ------------------------------------------------------------ ajustes (usado pela aba Ajustes)
 window.Radar = {
+  diario: () => ls.get("radar_diario", []),
+  salvarDiario(D) { return ls.set("radar_diario", D); },
+  operar: () => ls.get("radar_operar", {orcamento: 1000, risco_pct: 1, max_moeda_pct: 25}),
+  salvarOperar(o) { return ls.set("radar_operar", o); },
   ajustes: () => JSON.parse(JSON.stringify(AJ)), padrao: () => JSON.parse(JSON.stringify(PADRAO)),
   salvar(novo) { Object.assign(AJ, novo); ls.set("radar_ajustes", AJ); location.reload(); },
   limparCache() { for (const k of ["radar_lab", "radar_hl_contas"]) ls.del(k); location.reload(); },

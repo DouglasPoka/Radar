@@ -73,6 +73,26 @@ label.rot{font-size:13px;color:var(--fraco);display:block;margin:10px 0 4px}
 .dupla{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .chave{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--linha)}
 .chave input{width:22px;height:22px;accent-color:var(--verde)}
+.fase{font-size:13px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--card2)}
+.f-baixo{color:var(--cinza)} .f-aumentando{color:#facc15} .f-alto{color:var(--laranja)} .f-acontecendo{color:var(--azul)} .f-recuperando{color:var(--lima)} .f-sem_dados{color:var(--fraco)}
+.risco{position:relative;height:8px;border-radius:6px;background:var(--card2);margin:10px 0 4px;overflow:visible}
+.risco .enc{position:absolute;left:0;top:0;bottom:0;border-radius:6px}
+.risco .base{position:absolute;top:-4px;width:2px;height:16px;background:var(--fraco)}
+.grande{font-size:28px;font-weight:750;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.ordem{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--linha);font-size:14.5px}
+.ordem:last-child{border-bottom:0}
+.ordem .tipo{font-size:11.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.ordem b{font-variant-numeric:tabular-nums}
+.copia{background:var(--card2);border:0;color:var(--texto);font:inherit;font-size:13.5px;font-weight:650;padding:5px 9px;border-radius:9px;cursor:pointer;font-variant-numeric:tabular-nums}
+.linha2{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.mini{display:flex;gap:8px;margin-top:10px} .mini .btn{margin-top:0;padding:10px;font-size:14px}
+.btn.sec{background:transparent;border:1px solid var(--linha)}
+.stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;text-align:center}
+.stat div{background:var(--card2);border-radius:12px;padding:8px 4px} .stat b{display:block;font-size:17px} .stat span{font-size:11.5px;color:var(--fraco)}
+.folha-fundo{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.folha{background:var(--card);width:100%;max-width:560px;border-radius:22px 22px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--texto);color:var(--bg);padding:8px 14px;border-radius:999px;font-size:14px;font-weight:600;z-index:40}
+.sino{position:relative} .sino i{position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;background:var(--verm)}
 .badge{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--card2);color:var(--fraco);white-space:nowrap}
 </style>
 </head>
@@ -81,7 +101,8 @@ label.rot{font-size:13px;color:var(--fraco);display:block;margin:10px 0 4px}
   <header>
     <h1>Radar</h1>
     <div class="topo-dir"><div class="atualizado" id="status"><span class="dot"></span>carregando</div>
-      <button class="ajuda-btn" onclick="document.getElementById('ajuda').classList.toggle('oculto')" aria-label="Como ler">?</button></div>
+      <button class="ajuda-btn sino" id="btn-avisos" onclick="irPara('alertas')" aria-label="Avisos">🔔</button>
+      <button class="ajuda-btn" onclick="irPara('inicio');document.getElementById('ajuda').classList.toggle('oculto')" aria-label="Como ler">?</button></div>
   </header>
 
   <!-- INÍCIO -->
@@ -98,6 +119,21 @@ label.rot{font-size:13px;color:var(--fraco);display:block;margin:10px 0 4px}
     <div class="card clima" id="clima"></div>
     <div id="moedas"><div class="carregando"><div class="giro"></div>Buscando os dados do mercado…<br><span style="font-size:13px">Na primeira vez pode levar até 30 segundos.</span></div></div>
     <div class="aviso">Indicações automáticas a partir de dados públicos. Não é recomendação de investimento.</div>
+  </section>
+
+  <!-- CAPITULAÇÃO -->
+  <section id="tela-cap" class="oculto">
+    <div class="card"><b style="font-size:17px">🌊 Previsão de capitulação</b>
+      <p class="fr" style="font-size:14px;margin:6px 0 0">Capitulação é quando muita gente desiste e vende no prejuízo ao mesmo tempo. Costuma acontecer perto dos fundos. O radar tenta avisar <b style="color:var(--texto)">antes</b>, com base no que aconteceu nas semanas anteriores às capitulações do passado.</p>
+      <div id="cap-modelo"></div></div>
+    <div id="cap-moedas"></div>
+  </section>
+
+  <!-- OPERAR -->
+  <section id="tela-operar" class="oculto">
+    <div class="card" id="op-config"></div>
+    <div id="op-moedas"></div>
+    <div class="card" id="op-diario"></div>
   </section>
 
   <!-- ALERTAS -->
@@ -120,9 +156,10 @@ label.rot{font-size:13px;color:var(--fraco);display:block;margin:10px 0 4px}
 
 <nav>
   <button class="ativo" data-tela="inicio"><span class="ic">🏠</span>Início</button>
-  <button data-tela="alertas"><span class="ic">🔔</span>Avisos</button>
-  <button data-tela="ajustes"><span class="ic">💼</span>Minhas moedas</button>
-  <a href="./completo.html"><span class="ic">📊</span>Modo completo</a>
+  <button data-tela="cap"><span class="ic">🌊</span>Capitulação</button>
+  <button data-tela="operar"><span class="ic">💱</span>Operar</button>
+  <button data-tela="ajustes"><span class="ic">💼</span>Moedas</button>
+  <a href="./completo.html"><span class="ic">📊</span>Completo</a>
 </nav>
 
 <script>
@@ -235,11 +272,17 @@ function niveis(m) {
   return {entradas, stop, alvos: res.slice(0, 3)};
 }
 const maiuscula = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
-function planoHTML(m) {
-  const P = m.preco, {entradas, alvos} = niveis(m), x = m.sinal, tem = m.quantidade > 0 && m.preco_medio > 0;
+function planoNums(m) {
+  const P = m.preco, {entradas, alvos} = niveis(m), x = m.sinal || {};
   const atr = m.sopr?.atr14 || P * 0.03, mS = m.decisao?.stop_atr;
-  const e0 = x?.voltar_ate || entradas[0], medio = 1 / (0.3 / e0 + 0.3 / entradas[1] + 0.4 / entradas[2]);
+  const e0 = x.voltar_ate || entradas[0], ent = [e0, entradas[1], entradas[2]], pesos = [0.3, 0.3, 0.4];
+  const medio = 1 / (0.3 / e0 + 0.3 / entradas[1] + 0.4 / entradas[2]);
   const stop = Math.max(mS ? medio - mS * atr : Math.min(...entradas) - atr, P * 0.05);
+  return {P, ent, pesos, medio, stop, alvos, mS, agora: !x.voltar_ate && ["compra", "perto_compra"].includes(x.estado)};
+}
+function planoHTML(m) {
+  const {P, alvos, mS, stop, ent} = planoNums(m), x = m.sinal, tem = m.quantidade > 0 && m.preco_medio > 0;
+  const entradas = ent, e0 = ent[0];
   const lista = l => `<ul>${l.map(traduzir).map(t => `<li>${esc(maiuscula(t))}</li>`).join("")}</ul>`;
   let h = "";
   if (x.estado !== "aguardar" || x.voltar_ate) h += `<h4>Por quê</h4>${lista(x.motivos)}`;
@@ -325,12 +368,13 @@ function alternar(s) { abertos.has(s) ? abertos.delete(s) : abertos.add(s); rend
 
 // ===================================================================== avisos (versão simples)
 function avisosHTML() {
-  const L = (E.alertas || []).filter(a => a.tipo.startsWith("sinal_") || a.tipo === "sopr" || ((a.tipo === "baleia_compra" || a.tipo === "baleia_venda") && a.importante)).slice(0, 40);
+  const L = (E.alertas || []).filter(a => a.tipo.startsWith("sinal_") || a.tipo.startsWith("cap_") || a.tipo.startsWith("diario_") || a.tipo === "sopr" || ((a.tipo === "baleia_compra" || a.tipo === "baleia_venda") && a.importante)).slice(0, 40);
   if (!L.length) return `<div class="fr" style="padding:10px 0">Nenhum aviso ainda. Eles aparecem quando o sinal de alguma moeda muda.</div>`;
   return L.map(a => {
     let t = a.texto;
     const est = a.tipo.startsWith("sinal_") ? a.tipo.slice(6) : null;
     if (est && SIMPLES[est]) t = `${SIMPLES[est].emo} <b>${a.moeda}</b>: ${SIMPLES[est].txt.toLowerCase()}`;
+    else if (a.amigavel) t = esc(a.amigavel);
     else if (a.tipo === "baleia_compra") t = `🐋 <b>${a.moeda}</b>: uma baleia fez uma compra grande (${esc(a.texto.match(/\$[\d.,]+[kMB]?/)?.[0] || "")})`;
     else if (a.tipo === "baleia_venda") t = `🐋 <b>${a.moeda}</b>: uma baleia fez uma venda grande (${esc(a.texto.match(/\$[\d.,]+[kMB]?/)?.[0] || "")})`;
     else if (a.tipo === "sopr") t = `📊 <b>${a.moeda}</b>: ${/lucro extremo/i.test(a.texto) ? "muita gente vendendo com lucro (sinal de topo)" : "muita gente vendendo no prejuízo (sinal de fundo)"}`;
@@ -382,24 +426,248 @@ function salvar() {
 async function ativarNotif(b) { const r = await Radar.pedirNotificacao();
   b.textContent = r === "granted" ? "Ligados ✔" : r === "sem_suporte" ? "Sem suporte" : "Bloqueados"; }
 
+// ===================================================================== CAPITULAÇÃO
+const FASES = {
+  baixo: ["Risco baixo", "Nada a fazer por aqui. Para comprar, siga o sinal da tela inicial."],
+  aumentando: ["Risco aumentando", "Evite comprar tudo de uma vez. Guarde uma parte do dinheiro para a zona provável."],
+  alto: ["Risco alto", "A capitulação pode estar perto. Prepare ordens em partes dentro da zona provável e não compre tudo agora."],
+  acontecendo: ["Acontecendo agora", "Vendedores desistindo: historicamente, região de fundo. Compre em partes e espere a virada antes da parte maior."],
+  recuperando: ["Passou, recuperando", "A capitulação recente já aconteceu. O radar agora procura a virada para cima (veja a tela inicial)."],
+  sem_dados: ["Calculando", "O modelo precisa do histórico (Laboratório) para calcular. Aguarde alguns segundos."],
+};
+const dataBR = t => new Date(t * 1000).toLocaleDateString("pt-BR", {day: "2-digit", month: "short", year: "numeric"});
+const capAbertos = new Set();
+function telaCap() {
+  const comMod = E.moedas.map(m => m.capitulacao?.modelo).find(Boolean);
+  document.getElementById("cap-modelo").innerHTML = comMod && comMod.teste ? `<div class="nota" style="margin-top:10px">No teste com o período mais recente (que o modelo nunca viu), quando o alerta ligou a capitulação veio nas 3 semanas seguintes em <b style="color:var(--texto)">${nf(comMod.teste.acerto_alerta ?? 0, 0)}%</b> das vezes, contra <b style="color:var(--texto)">${nf(comMod.teste.base, 0)}%</b> num dia qualquer. Use como aviso para se preparar, não como certeza.</div>` : "";
+  document.getElementById("cap-moedas").innerHTML = E.moedas.map(m => {
+    const c = m.capitulacao, cor = CORES[m.nome] || "#8b7cf6";
+    const topo = `<div class="topo"><div class="nome"><i class="bola" style="background:${cor}"></i>${m.nome}</div><span class="fase f-${c?.fase || "sem_dados"}">${(FASES[c?.fase] || FASES.sem_dados)[0]}</span></div>`;
+    if (!c || c.fase === "sem_dados" && c.chance == null) return `<div class="card">${topo}<div class="nota">${c?.motivo ? esc(maiuscula(c.motivo)) : "Calculando…"}</div></div>`;
+    const F = FASES[c.fase] || FASES.sem_dados, ch = c.chance;
+    const corB = c.fase === "alto" ? "var(--laranja)" : c.fase === "aumentando" ? "#facc15" : c.fase === "acontecendo" ? "var(--azul)" : "var(--cinza)";
+    let h = `<div class="card">${topo}`;
+    if (c.fase === "acontecendo") h += `<div class="grande" style="margin-top:12px;color:var(--azul)">Agora</div><div class="fr" style="font-size:14px">Os vendedores estão no nível de desistência.</div>`;
+    else if (ch != null) h += `<div style="margin-top:12px"><span class="grande">${nf(ch, 0)}%</span> <span class="fr" style="font-size:14px">de chance nas próximas 3 semanas</span></div>
+      <div class="risco"><div class="enc" style="width:${Math.min(100, ch)}%;background:${corB}"></div>${c.base != null ? `<div class="base" style="left:${Math.min(100, c.base)}%"></div>` : ""}</div>
+      <div class="fr" style="font-size:12.5px">${c.base != null ? `Normal: ${nf(c.base, 0)}% (traço)` : ""}</div>`;
+    h += `<div class="acao" style="margin:12px 0 0">${F[1]}</div>`;
+    if (c.zona) { const d1 = (c.zona.de / m.preco - 1) * 100, d2 = (c.zona.ate / m.preco - 1) * 100;
+      h += `<div class="passo" style="margin-top:12px"><span>Zona provável do fundo</span><b>${dinheiro(c.zona.de)} – ${dinheiro(c.zona.ate)}</b></div>
+        <div class="nota">${d2 < 0 ? `${nf(Math.abs(d2), 0)}% a ${nf(Math.abs(d1), 0)}% abaixo do preço atual. ` : d1 <= 0 ? "O preço já está dentro dessa faixa. " : "O preço já está abaixo dessa faixa. "}Calculada pela distância do fundo ao custo médio nas capitulações passadas ${c.zona.base} (${c.zona.casos} casos).</div>`; }
+    const fat = [...(c.fatores || []).map(f => f.txt), ...(c.extras || []).map(f => f.txt + " (agora)")];
+    const aberto = capAbertos.has(m.simbolo);
+    h += `<div class="rodape"><button class="det-btn" onclick="capAbertos.has('${m.simbolo}')?capAbertos.delete('${m.simbolo}'):capAbertos.add('${m.simbolo}');render(true)">${aberto ? "Fechar ▴" : "Detalhes ▾"}</button></div>`;
+    if (aberto) {
+      h += `<div class="detalhes">`;
+      if (fat.length) h += `<h4>O que está empurrando para a capitulação</h4><ul>${fat.map(t => `<li>${esc(t)}</li>`).join("")}</ul>`;
+      else h += `<h4>O que está empurrando</h4><p class="nota">Nada relevante agora.</p>`;
+      const H = c.historico;
+      if (H) {
+        h += `<h4>Histórico desta moeda</h4><div class="passo"><span>Capitulações no histórico</span><b>${H.capitulacoes}</b></div>
+          <div class="passo"><span>O alerta ligou antes em</span><b>${H.avisadas} de ${H.capitulacoes}</b></div>
+          ${H.antecedencia_mediana != null ? `<div class="passo"><span>Antecedência típica</span><b>${H.antecedencia_mediana} dias</b></div>` : ""}`;
+        if (H.ultimas?.length) h += `<h4>Últimas capitulações</h4>` + H.ultimas.map(u => `<div class="passo"><span>${dataBR(u.t)}${u.avisou ? ` <span class="pos" style="font-size:12.5px">avisou ${u.antecedencia}d antes</span>` : ` <span class="fr" style="font-size:12.5px">sem aviso</span>`}</span><b>fundo ${dinheiro(u.fundo)}${u.depois30 != null ? ` <span class="${u.depois30 >= 0 ? "pos" : "neg"}" style="font-weight:500">${pct(u.depois30, 0)} 30d</span>` : ""}</b></div>`).join("");
+        h += `<p class="nota">"Avisou antes" inclui o período usado para treinar o modelo; a medida honesta de acerto é a do teste, no topo.</p>`;
+      }
+      h += `</div>`;
+    }
+    return h + `</div>`;
+  }).join("");
+}
+
+// ===================================================================== OPERAR: ordens prontas + diário
+const opAbertos = new Set();
+let opConfigAberta = false;
+const R = () => Radar.operar();
+function arred(v, passo, modo) {   // arredonda para o passo da Binance (preço ou quantidade)
+  if (!passo) return v;
+  const casas = Math.max(0, Math.round(-Math.log10(passo))), k = (modo === "cima" ? Math.ceil : modo === "baixo" ? Math.floor : Math.round)(v / passo + 1e-9);
+  return +(k * passo).toFixed(casas);
+}
+const casasDe = passo => passo ? Math.max(0, Math.round(-Math.log10(passo))) : null;
+function fmtQ(v, passo) { const c = casasDe(passo); return c != null ? nf(v, c) : nf(v, v >= 100 ? 2 : v >= 1 ? 4 : 6); }
+function fmtP(v, tick) { const c = casasDe(tick); return c != null ? "US$ " + nf(v, c) : dinheiro(v); }
+const bruto = (v, passo) => { const c = casasDe(passo); return c != null ? v.toFixed(c) : String(+v.toPrecision(8)); };
+function copiar(t) { try { navigator.clipboard.writeText(t); } catch (e) {} const d = document.createElement("div"); d.className = "toast"; d.textContent = "Copiado: " + t; document.body.appendChild(d); setTimeout(() => d.remove(), 1400); }
+// diário
+const D = () => Radar.diario();
+const qtdAberta = op => (op.compras || []).reduce((a, c) => a + c.qtd, 0) - (op.vendas || []).reduce((a, c) => a + c.qtd, 0);
+const custoMedio = op => { const q = (op.compras || []).reduce((a, c) => a + c.qtd, 0); return q ? op.compras.reduce((a, c) => a + c.qtd * c.preco, 0) / q : 0; };
+const realizado = op => (op.vendas || []).reduce((a, v) => a + v.qtd * (v.preco - custoMedio(op)), 0);
+function abertasDe(s) { return D().filter(op => op.s === s && qtdAberta(op) > 1e-12); }
+function investidoAberto() { return D().reduce((a, op) => a + Math.max(0, qtdAberta(op)) * custoMedio(op), 0); }
+function ordensPara(m) {
+  const O = R(), x = m.sinal; if (!x || !m.preco) return null;
+  const rg = m.regras || {}, minN = rg.minNotional || 5, {P, ent, pesos, medio, stop, alvos, agora} = planoNums(m);
+  const temAb = abertasDe(m.simbolo), qAb = temAb.reduce((a, op) => a + qtdAberta(op), 0), qMinhas = m.quantidade || 0, qPos = qAb || qMinhas;
+  const out = {tipo: null, linhas: [], stop: arred(stop, rg.tick, "baixo"), alvos: alvos.map(a => arred(a, rg.tick, "cima")), aviso: null, qPos};
+  if (x.estado === "perto_venda" || x.estado === "venda") {
+    out.tipo = "venda";
+    if (!qPos) { out.aviso = "Você não tem posição registrada nesta moeda. Pelo sinal, evite comprar agora."; return out; }
+    const fr = x.estado === "venda" ? 0.5 : 0.25, q = arred(qPos * fr, rg.step, "baixo");
+    if (q * P >= minN) out.linhas.push({lado: "venda", tipo: "a mercado", q, p: P, txt: `Vender ${x.estado === "venda" ? "metade" : "1/4"} agora`});
+    const resto = qPos - q, q2 = arred(resto / 3, rg.step, "baixo");
+    if (q2 * alvos[0] >= minN) out.alvos.forEach((a, k) => out.linhas.push({lado: "venda", tipo: "limitada", q: q2, p: a, txt: `Vender 1/3 do resto no ${k + 1}º alvo`}));
+    return out;
+  }
+  // compra: tamanho pelo risco (perda máxima se bater no stop) e limitado pelo máximo por moeda e pelo que sobrou do orçamento
+  const riscoUS = O.orcamento * O.risco_pct / 100, maxUS = O.orcamento * O.max_moeda_pct / 100;
+  const jaNaMoeda = qAb * (temAb.length ? custoMedio(temAb[0]) : P), livre = Math.max(0, O.orcamento - investidoAberto());
+  let partes = ent.map((p, k) => ({p, fr: pesos[k], k}));
+  if (!agora) partes = partes.slice(1).map(z => ({...z, fr: z.fr / 0.7}));   // sem compra agora: só as ordens programadas mais abaixo
+  const medioUsado = 1 / partes.reduce((a, z) => a + z.fr / z.p, 0), perdaFr = (medioUsado - stop) / medioUsado;
+  let total = perdaFr > 0 ? riscoUS / perdaFr : maxUS;
+  total = Math.min(total, Math.max(0, maxUS - jaNaMoeda), livre);
+  out.tipo = agora ? (x.estado === "compra" ? "compra" : "comece") : "programar";
+  out.total = total; out.risco = total * perdaFr; out.limitado = total < (perdaFr > 0 ? riscoUS / perdaFr : maxUS) - 1;
+  if (total < minN) { out.aviso = jaNaMoeda >= maxUS - minN ? "Você já está no máximo por moeda definido no seu orçamento." : "Orçamento livre abaixo do mínimo da Binance (US$ " + nf(minN, 0) + ")."; return out; }
+  if (total * Math.min(...partes.map(z => z.fr)) < minN) partes = [{...partes[0], fr: 1}];
+  for (const z of partes) {
+    const p = arred(z.p, rg.tick, "baixo"), q = arred(total * z.fr / p, rg.step, "baixo");
+    if (q > 0) out.linhas.push({lado: "compra", tipo: "limitada", q, p, txt: z.k === 0 && agora ? "1ª parte (agora)" : `${z.k + 1}ª parte, se cair até`});
+  }
+  out.ganho1 = out.linhas.reduce((a, l) => a + l.q * (out.alvos[0] - l.p), 0);
+  return out;
+}
+function telaOperar() {
+  const O = R(), inv = investidoAberto();
+  document.getElementById("op-config").innerHTML = `<div class="topo"><b style="font-size:17px">💱 Operar</b><button class="det-btn" onclick="opConfigAberta=!opConfigAberta;render(true)">${opConfigAberta ? "Fechar ▴" : "Ajustar ▾"}</button></div>
+    <div class="stat"><div><b>${usd(O.orcamento)}</b><span>orçamento</span></div><div><b>${usd(inv)}</b><span>em operações</span></div><div><b>${nf(O.risco_pct, 1)}%</b><span>risco por operação</span></div></div>
+    ${opConfigAberta ? `<div class="detalhes"><label class="rot">Orçamento total para operar (US$)</label><input class="campo" id="op-orc" inputmode="decimal" value="${String(O.orcamento).replace(".", ",")}">
+      <div class="dupla"><div><label class="rot">Risco por operação (%)</label><input class="campo" id="op-risco" inputmode="decimal" value="${String(O.risco_pct).replace(".", ",")}"></div>
+      <div><label class="rot">Máximo por moeda (%)</label><input class="campo" id="op-max" inputmode="decimal" value="${String(O.max_moeda_pct).replace(".", ",")}"></div></div>
+      <p class="nota">Risco por operação = quanto do orçamento você aceita perder se a operação bater na saída (stop). 1% a 2% é o usual. O tamanho de cada compra é calculado a partir disso.</p>
+      <button class="btn prim" onclick="salvarOp()">Salvar</button></div>` : `<p class="nota">As ordens abaixo já vêm no formato da Binance (quantidade e preço arredondados). Toque num número para copiar. Depois de executar, registre no diário.</p>`}`;
+  document.getElementById("op-moedas").innerHTML = E.moedas.map(m => {
+    const x = m.sinal, cor = CORES[m.nome] || "#8b7cf6"; if (!x) return "";
+    const o = ordensPara(m), S = SIMPLES[x.estado], rg = m.regras || {};
+    let h = `<div class="card"><div class="topo"><div class="nome"><i class="bola" style="background:${cor}"></i>${m.nome}</div><div class="preco">${dinheiro(m.preco)}</div></div>
+      <div class="veredito t-${x.tom}" style="margin-top:10px;font-size:16px"><i></i>${S.txt}</div>`;
+    const tit = {compra: "Ordens para colocar agora", comece: "Comece pequeno: só a 1ª ordem agora; as outras ficam programadas", programar: x.voltar_ate ? "Sem compra agora. Se quiser, deixe programadas:" : "Sem compra agora. Se quiser, deixe programadas mais abaixo:", venda: "Ordens de venda"}[o?.tipo] || "";
+    if (o) {
+      h += `<div class="motivo" style="margin-left:0">${tit}</div>`;
+      if (o.aviso) h += `<p class="nota">${o.aviso}</p>`;
+      h += o.linhas.map(l => `<div class="ordem"><div><div class="tipo ${l.lado === "compra" ? "pos" : "neg"}">${l.lado} ${l.tipo}</div><div class="fr" style="font-size:13px">${l.txt}</div></div>
+        <div class="linha2"><button class="copia" onclick="copiar('${bruto(l.q, rg.step)}')">${fmtQ(l.q, rg.step)} ${m.nome}</button><button class="copia" onclick="copiar('${bruto(l.p, rg.tick)}')">${l.tipo === "a mercado" ? "≈ " : ""}${fmtP(l.p, rg.tick)}</button></div></div>`).join("");
+      if (o.tipo !== "venda" && o.linhas.length) {
+        h += `<div class="ordem"><div><div class="tipo neg">saída (stop)</div><div class="fr" style="font-size:13px">vender tudo se fechar abaixo de</div></div><button class="copia" onclick="copiar('${bruto(o.stop, rg.tick)}')">${fmtP(o.stop, rg.tick)}</button></div>
+          <p class="nota">Total ≈ ${usd(o.total)}. Se bater na saída, perda ≈ <b class="neg">${usd(o.risco)}</b>; no 1º alvo (${fmtP(o.alvos[0], rg.tick)}), ganho ≈ <b class="pos">${usd(o.ganho1)}</b>.${o.limitado ? " Tamanho limitado pelo máximo por moeda ou pelo orçamento livre." : ""}</p>
+          <div class="mini"><button class="btn" onclick="formCompra('${m.simbolo}')">Registrar compra no diário</button></div>`;
+      } else if (o.tipo === "venda" && o.linhas.length) h += `<div class="mini"><button class="btn" onclick="formVenda(null,'${m.simbolo}')">Registrar venda no diário</button></div>`;
+    }
+    return h + `</div>`;
+  }).join("");
+  telaDiario();
+}
+function salvarOp() {
+  const g = id => numero(document.getElementById(id).value);
+  const o = {orcamento: Math.max(0, g("op-orc")), risco_pct: Math.min(10, Math.max(0.1, g("op-risco") || 1)), max_moeda_pct: Math.min(100, Math.max(1, g("op-max") || 25))};
+  Radar.salvarOperar(o); opConfigAberta = false; render(true);
+}
+function telaDiario() {
+  const L = D(), ab = L.filter(op => qtdAberta(op) > 1e-12), fe = L.filter(op => qtdAberta(op) <= 1e-12 && (op.vendas || []).length);
+  const res = fe.map(op => realizado(op)), ganhos = res.filter(v => v > 0), perdas = res.filter(v => v <= 0);
+  const preco = s => E.moedas.find(m => m.simbolo === s)?.preco;
+  let h = `<div class="topo"><b style="font-size:17px">📒 Diário de operações</b><span class="fr" style="font-size:13px">${ab.length} aberta(s)</span></div>`;
+  if (fe.length) h += `<div class="stat"><div><b class="${res.reduce((a, b) => a + b, 0) >= 0 ? "pos" : "neg"}">${usd(res.reduce((a, b) => a + b, 0))}</b><span>resultado fechado</span></div>
+    <div><b>${nf(ganhos.length / fe.length * 100, 0)}%</b><span>com lucro (${fe.length})</span></div>
+    <div><b>${ganhos.length ? usd(ganhos.reduce((a, b) => a + b, 0) / ganhos.length) : "-"} / ${perdas.length ? usd(perdas.reduce((a, b) => a + b, 0) / perdas.length) : "-"}</b><span>ganho / perda média</span></div></div>`;
+  if (!L.length) h += `<p class="nota">Nenhuma operação ainda. Quando executar uma ordem na Binance, toque em "Registrar compra no diário". O radar passa a acompanhar e avisa quando bater na saída ou num alvo.</p>`;
+  const passo = s => E.moedas.find(m => m.simbolo === s)?.regras?.step;
+  h += ab.map(op => { const q = qtdAberta(op), cm = custoMedio(op), p = preco(op.s), pnl = p ? (p - cm) * q : null, pp = p ? (p / cm - 1) * 100 : null, nome = op.s.replace("USDT", "");
+    const ab_ = opAbertos.has(op.id);
+    return `<div style="border-top:1px solid var(--linha);margin-top:12px;padding-top:10px">
+      <div class="topo"><b>${nome} <span class="fr" style="font-weight:500;font-size:13px">${fmtQ(q, passo(op.s))} a ${dinheiro(cm)}</span></b><b class="${pnl >= 0 ? "pos" : "neg"}">${pp != null ? pct(pp) : "-"} <span style="font-weight:500;font-size:13px">${pnl != null ? usd(pnl) : ""}</span></b></div>
+      <div class="fr" style="font-size:13px;margin-top:2px">Saída ${op.stop ? dinheiro(op.stop) : "-"}${(op.alvos || []).length ? " · alvos " + op.alvos.map((a, k) => `${dinheiro(a)}${op.avisos?.["a" + k] ? " ✓" : ""}`).join(", ") : ""}${p && op.stop && p < op.stop ? ' · <b class="neg">abaixo da saída</b>' : ""}</div>
+      <div class="mini"><button class="btn" onclick="formVenda('${op.id}')">Vendi</button><button class="btn" onclick="formCompra('${op.s}','${op.id}')">Comprei mais</button><button class="btn sec" onclick="opAbertos.has('${op.id}')?opAbertos.delete('${op.id}'):opAbertos.add('${op.id}');render(true)">${ab_ ? "▴" : "···"}</button></div>
+      ${ab_ ? `<div class="detalhes">${[...(op.compras || []).map(c => ({...c, l: "compra"})), ...(op.vendas || []).map(c => ({...c, l: "venda"}))].sort((a, b) => a.t - b.t).map(c => `<div class="passo"><span>${dataBR(c.t)} · ${c.l}</span><b>${fmtQ(c.qtd, passo(op.s))} a ${dinheiro(c.preco)}</b></div>`).join("")}
+        <div class="mini"><button class="btn sec" onclick="editarOp('${op.id}')">Editar saída e alvos</button><button class="btn sec" onclick="excluirOp('${op.id}')">Excluir</button></div></div>` : ""}</div>`; }).join("");
+  if (fe.length) h += `<details style="margin-top:12px"><summary class="det-btn" style="list-style:none">Operações encerradas (${fe.length})</summary>${fe.slice().reverse().map(op => { const r = realizado(op), inv = (op.compras || []).reduce((a, c) => a + c.qtd * c.preco, 0);
+    return `<div class="passo"><span>${op.s.replace("USDT", "")} · ${dataBR(op.criada)}</span><b class="${r >= 0 ? "pos" : "neg"}">${usd(r)} <span style="font-weight:500">${inv ? pct(r / inv * 100) : ""}</span></b></div>`; }).join("")}</details>`;
+  h += `<div class="mini" style="margin-top:14px"><button class="btn sec" onclick="exportarDiario()">Exportar backup</button><button class="btn sec" onclick="document.getElementById('imp-diario').click()">Importar backup</button></div>
+    <input type="file" id="imp-diario" accept="application/json,.json" class="oculto" onchange="importarDiario(this)">
+    <p class="nota">O diário fica salvo só neste celular. Faça backup de vez em quando.</p>`;
+  document.getElementById("op-diario").innerHTML = h;
+}
+// formulários (folha que sobe de baixo)
+function folha(titulo, corpo, onSalvar) {
+  const f = document.createElement("div"); f.className = "folha-fundo";
+  f.innerHTML = `<div class="folha"><div class="topo"><b style="font-size:17px">${titulo}</b><button class="det-btn" id="fl-x">Cancelar</button></div>${corpo}<button class="btn prim" id="fl-ok">Salvar</button></div>`;
+  document.body.appendChild(f);
+  const fechar = () => { f.remove(); render(true); };
+  f.querySelector("#fl-x").onclick = fechar; f.onclick = ev => { if (ev.target === f) fechar(); };
+  f.querySelector("#fl-ok").onclick = () => { if (onSalvar(f) !== false) fechar(); };
+}
+const campo = (id, rot, v) => `<label class="rot">${rot}</label><input class="campo" id="${id}" inputmode="decimal" value="${v == null || v === "" ? "" : String(+(+v).toPrecision(10)).replace(".", ",")}">`;
+const lerCampo = (f, id) => numero(f.querySelector("#" + id).value);
+function formCompra(s, idOp) {
+  const m = E.moedas.find(z => z.simbolo === s); if (!m) return;
+  const o = ordensPara(m) || {}, l = (o.linhas || []).find(z => z.lado === "compra"), op = idOp ? D().find(z => z.id === idOp) : null;
+  folha(`${op ? "Comprei mais" : "Registrar compra"} · ${m.nome}`,
+    campo("f-p", "Preço pago (US$)", l ? l.p : m.preco) + campo("f-q", `Quantidade (${m.nome})`, l ? l.q : "") +
+    (op ? "" : `<div class="dupla"><div>${campo("f-s", "Saída / stop (US$)", o.stop)}</div><div>${campo("f-a1", "1º alvo (US$)", o.alvos?.[0])}</div></div>
+      <div class="dupla"><div>${campo("f-a2", "2º alvo (US$)", o.alvos?.[1])}</div><div>${campo("f-a3", "3º alvo (US$)", o.alvos?.[2])}</div></div>`) +
+    `<p class="nota">Use o preço e a quantidade que a Binance realmente executou.</p>`,
+    f => { const p = lerCampo(f, "f-p"), q = lerCampo(f, "f-q"); if (!(p > 0 && q > 0)) { alert("Preencha preço e quantidade."); return false; }
+      const L = D(), t = Math.floor(Date.now() / 1000);
+      if (op) { const alvo = L.find(z => z.id === op.id); alvo.compras.push({t, preco: p, qtd: q}); }
+      else L.push({id: "op" + Date.now().toString(36), s, criada: t, compras: [{t, preco: p, qtd: q}], vendas: [], stop: lerCampo(f, "f-s") || null,
+        alvos: ["f-a1", "f-a2", "f-a3"].map(k => lerCampo(f, k)).filter(v => v > 0), avisos: {}, sinal: m.sinal?.estado || null});
+      Radar.salvarDiario(L); });
+}
+function formVenda(idOp, s) {
+  let L = D(), op = idOp ? L.find(z => z.id === idOp) : L.find(z => z.s === s && qtdAberta(z) > 1e-12);
+  if (!op) { alert("Não há operação aberta desta moeda no diário. Registre a compra primeiro."); return; }
+  const m = E.moedas.find(z => z.simbolo === op.s), q = qtdAberta(op);
+  folha(`Registrar venda · ${op.s.replace("USDT", "")}`, campo("f-p", "Preço de venda (US$)", m?.preco) + campo("f-q", `Quantidade vendida (aberto: ${fmtQ(q)})`, q) +
+    `<p class="nota">Venda parcial mantém a operação aberta com o restante.</p>`,
+    f => { const p = lerCampo(f, "f-p"), qv = Math.min(lerCampo(f, "f-q"), q); if (!(p > 0 && qv > 0)) { alert("Preencha preço e quantidade."); return false; }
+      L = D(); L.find(z => z.id === op.id).vendas.push({t: Math.floor(Date.now() / 1000), preco: p, qtd: qv}); Radar.salvarDiario(L); });
+}
+function editarOp(id) {
+  const L = D(), op = L.find(z => z.id === id); if (!op) return;
+  folha("Editar saída e alvos", campo("f-s", "Saída / stop (US$)", op.stop) + `<div class="dupla"><div>${campo("f-a1", "1º alvo", op.alvos?.[0])}</div><div>${campo("f-a2", "2º alvo", op.alvos?.[1])}</div></div>${campo("f-a3", "3º alvo", op.alvos?.[2])}`,
+    f => { op.stop = lerCampo(f, "f-s") || null; op.alvos = ["f-a1", "f-a2", "f-a3"].map(k => lerCampo(f, k)).filter(v => v > 0); op.avisos = {}; Radar.salvarDiario(L); });
+}
+function excluirOp(id) { if (!confirm("Excluir esta operação do diário?")) return; Radar.salvarDiario(D().filter(z => z.id !== id)); render(true); }
+function exportarDiario() {
+  const b = new Blob([JSON.stringify({versao: 1, diario: D(), operar: R()}, null, 1)], {type: "application/json"}), a = document.createElement("a");
+  a.href = URL.createObjectURL(b); a.download = "radar-diario-" + new Date().toISOString().slice(0, 10) + ".json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function importarDiario(inp) {
+  const f = inp.files[0]; if (!f) return; const r = new FileReader();
+  r.onload = () => { try { const j = JSON.parse(r.result); if (!Array.isArray(j.diario)) throw 0;
+    if (!confirm(`Importar ${j.diario.length} operação(ões)? Isso substitui o diário atual.`)) return;
+    Radar.salvarDiario(j.diario); if (j.operar) Radar.salvarOperar(j.operar); render(true); } catch (e) { alert("Arquivo inválido."); } };
+  r.readAsText(f);
+}
+
 // ===================================================================== navegação e atualização
-document.querySelector("nav").addEventListener("click", ev => {
-  const b = ev.target.closest("button"); if (!b) return;
-  tela = b.dataset.tela;
-  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("ativo", x === b));
-  ["inicio", "alertas", "ajustes"].forEach(t => document.getElementById("tela-" + t).classList.toggle("oculto", t !== tela));
-  if (tela === "ajustes") telaAjustes();
-  window.scrollTo(0, 0); render();
-});
+function irPara(t) {
+  tela = t;
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("ativo", x.dataset.tela === t));
+  ["inicio", "cap", "operar", "alertas", "ajustes"].forEach(z => document.getElementById("tela-" + z).classList.toggle("oculto", z !== t));
+  if (t === "ajustes") telaAjustes();
+  if (t === "alertas") { try { localStorage.setItem("radar_avisos_vistos", String(Date.now() / 1000)); } catch (e) {} }
+  window.scrollTo(0, 0); render(true);
+}
+document.querySelector("nav").addEventListener("click", ev => { const b = ev.target.closest("button"); if (b) irPara(b.dataset.tela); });
 function statusHTML() {
   const st = E.status || {}, v = Object.values(st);
   const erro = v.some(x => String(x).startsWith("erro")), esperando = v.some(x => ["conectando", "aguardando", "calculando", "reconectando"].includes(x));
   const [cl, txt] = erro ? ["erro", "algumas informações falharam"] : esperando ? ["esp", "atualizando…"] : ["ok", "ao vivo"];
   return `<span class="dot ${cl}"></span>${txt}`;
 }
-function render() {
+function render(forcar) {
   if (!E) return;
   document.getElementById("status").innerHTML = statusHTML();
+  let visto = 0; try { visto = +localStorage.getItem("radar_avisos_vistos") || 0; } catch (e) {}
+  document.getElementById("btn-avisos").innerHTML = "🔔" + ((E.alertas || []).some(a => a.ts > visto && (a.amigavel || a.tipo.startsWith("sinal_"))) ? "<i></i>" : "");
+  if (document.querySelector(".folha-fundo")) return;   // formulário aberto: não redesenhar por baixo
+  const ativo = document.activeElement; if (!forcar && ativo && ativo.tagName === "INPUT" && ativo.closest("#tela-" + tela)) return;
+  if (tela === "cap") telaCap();
+  if (tela === "operar") telaOperar();
   if (tela === "inicio") {
     document.getElementById("clima").innerHTML = clima();
     if (E.moedas.some(m => m.sinal) || E.moedas.every(m => m.preco)) document.getElementById("moedas").innerHTML = E.moedas.map(cartao).join("");

@@ -38,6 +38,40 @@ Ela só precisa ficar hospedada em algum lugar para você abrir pelo link. Vamos
   nessa moeda**. O "?" no topo explica as cores.
 - **📊 Modo completo** (botão na barra de baixo): o painel com todos os indicadores, gráficos e o Laboratório.
 
+## 🌊 Capitulação (previsão antecipada)
+
+Capitulação é quando muita gente desiste e vende no prejuízo ao mesmo tempo (SOPR no nível mais
+baixo do último ano). Costuma acontecer perto dos fundos. Nesta seção, para cada moeda:
+
+- **Chance de capitulação nas próximas 3 semanas**, comparada com a chance de um dia qualquer
+  (o traço na barra). Vem de um modelo treinado no histórico de todas as moedas com o que aparecia
+  nas semanas antes de cada capitulação: SOPR se aproximando do extremo, preço abaixo do custo
+  médio, queda desde a máxima, queda da semana, funding, RSI e dias seguidos no prejuízo.
+- **Fase**: risco baixo, aumentando, alto, acontecendo agora ou recuperando, com o que fazer em cada uma.
+- **Zona provável do fundo**: faixa de preço calculada pela distância entre o fundo e o custo médio
+  nas capitulações passadas daquela moeda.
+- **Detalhes**: o que está empurrando agora (inclui sinais ao vivo como liquidações, baleias e
+  medo, marcados "agora"), quantas capitulações o alerta avisou antes e as últimas capitulações,
+  com o fundo e quanto o preço subiu 30 dias depois.
+- No topo aparece o acerto no **teste** (período mais recente, que o modelo não usou para aprender).
+  O app avisa quando o risco fica alto ou a capitulação começa.
+
+## 💱 Operar (ordens prontas + diário)
+
+- Em **Ajustar**, defina o orçamento total, o risco por operação (quanto aceita perder se bater na
+  saída; 1% a 2% é o usual) e o máximo por moeda.
+- Para cada moeda, o radar monta as ordens de acordo com o sinal: compra limitada em partes (agora
+  ou programadas mais abaixo), a saída (stop) e os alvos, ou vendas quando o sinal é de realizar.
+  Quantidade e preço já vêm arredondados pelas regras da Binance. **Toque num número para copiar** e
+  cole no app da Binance. Também mostra quanto perde se bater na saída e quanto ganha no 1º alvo.
+- Depois de executar, toque em **Registrar compra no diário**. O diário acompanha cada operação
+  (resultado ao vivo, vendas parciais, compras adicionais), mostra o resultado das encerradas e
+  **avisa quando o preço bate na saída ou num alvo**.
+- O diário fica só no celular: use **Exportar backup** de vez em quando.
+- O app **não envia ordens** para a Binance: você executa lá e registra aqui.
+
+Os **Avisos** agora ficam no sino 🔔 no topo.
+
 ## Como o radar mede o próprio acerto
 
 - **Decisão final testada no histórico**: o Laboratório refaz o sinal inteiro dia a dia no passado

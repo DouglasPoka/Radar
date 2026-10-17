@@ -758,6 +758,176 @@ function testarDecisao(x, xb, ini, ehBtc) {
     hoje: est[n - 1]};
 }
 
+
+// ===================================================================== PREVISÃO ANTECIPADA DE CAPITULAÇÃO
+// Capitulação = SOPR 7d cai até o nível de prejuízo extremo (5% mais baixos do último ano).
+// O modelo aprende, com o histórico de todas as moedas juntas, quais condições costumam aparecer
+// nas 3 semanas ANTES disso e devolve a chance de acontecer nos próximos 21 dias.
+const CAP_H = 21;
+const CAP_FATORES = [
+  ["gap", "Os vendedores estão perto do nível de desistência (SOPR perto do extremo de prejuízo)", -1],
+  ["incl", "O SOPR está caindo rápido (mais gente vendendo no prejuízo a cada dia)", -1],
+  ["pvc", "Preço abaixo do custo médio de quem comprou nos últimos meses", -1],
+  ["dd", "Queda grande desde a máxima dos últimos 90 dias", -1],
+  ["r7", "Queda forte na última semana", -1],
+  ["fund", "Ainda há muita aposta alavancada na alta, que pode ser liquidada numa queda", 1],
+  ["rsi", "Força do preço (RSI) baixa", -1],
+  ["abaixo", "Compradores recentes no prejuízo há vários dias (cansaço)", 1],
+];
+function capEmCap(x, i) { return x.s7[i] != null && x.p5[i] != null && x.s7[i] <= x.p5[i]; }
+function capFeat(x, i) {
+  const atr = x.atrp[i];
+  if (i < 25 || !atr || x.s7[i] == null || x.p5[i] == null || x.p95[i] == null || x.custo[i] == null) return null;
+  const faixa = x.p95[i] - x.p5[i]; if (!(faixa > 0)) return null;
+  let hi = 0; for (let k = Math.max(0, i - 89); k <= i; k++) hi = Math.max(hi, x.d1[k].h);
+  let abaixo = 0; for (let k = 0; k < 20; k++) if (x.custo[i - k] != null && x.fech[i - k] < x.custo[i - k]) abaixo++;
+  const f = x.fund && x.fund[i] != null ? x.fund[i] : 0.01;
+  return [(x.s7[i] - x.p5[i]) / faixa, x.s7[i - 5] != null ? (x.s7[i] - x.s7[i - 5]) / faixa : 0,
+    (x.fech[i] / x.custo[i] - 1) / atr, (x.fech[i] / hi - 1) / atr, (x.fech[i] / x.fech[i - 7] - 1) / atr,
+    Math.max(-3, Math.min(5, f / 0.01)), (x.rsi[i] ?? 50) / 100, abaixo / 20];
+}
+function capInicios(x) {   // dias em que uma capitulação começou
+  const out = []; let ultimaCap = -999;
+  for (let i = 1; i < x.fech.length; i++) {
+    const em = capEmCap(x, i);
+    if (em && !capEmCap(x, i - 1) && x.p5[i - 1] != null && i - ultimaCap > 20) out.push(i);   // nova capitulação (não um "pisca")
+    if (em) ultimaCap = i;
+  }
+  return out;
+}
+function capAmostras(x) {
+  const n = x.fech.length, ini = capInicios(x), proximo = Array(n).fill(null);
+  let k = 0; for (let i = 0; i < n; i++) { while (k < ini.length && ini[k] <= i) k++; proximo[i] = k < ini.length ? ini[k] : null; }
+  const dias = [];
+  for (let i = 0; i < n; i++) {
+    if (capEmCap(x, i)) continue;
+    const f = capFeat(x, i); if (!f) continue;
+    const y = proximo[i] != null && proximo[i] - i <= CAP_H ? 1 : 0, conhecido = i + CAP_H < n;
+    dias.push({i, f, y, conhecido});
+  }
+  return {dias, inicios: ini};
+}
+const sigm = z => 1 / (1 + Math.exp(-z));
+function treinarLogistica(X, Y, iter = 400, lr = 0.3, l2 = 0.01) {
+  const d = X[0].length, mu = Array(d).fill(0), sd = Array(d).fill(0);
+  for (const r of X) r.forEach((v, k) => (mu[k] += v / X.length));
+  for (const r of X) r.forEach((v, k) => (sd[k] += (v - mu[k]) ** 2 / X.length));
+  for (let k = 0; k < d; k++) sd[k] = Math.sqrt(sd[k]) || 1;
+  const Z = X.map(r => r.map((v, k) => (v - mu[k]) / sd[k]));
+  const pos = Y.reduce((a, b) => a + b, 0), wPos = pos ? (Y.length - pos) / pos : 1;   // eventos raros: peso maior
+  let w = Array(d).fill(0), b = 0;
+  for (let it = 0; it < iter; it++) {
+    const gw = Array(d).fill(0); let gb = 0, tot = 0;
+    for (let n = 0; n < Z.length; n++) {
+      const z = Z[n], peso = Y[n] ? wPos : 1; let s = b; for (let k = 0; k < d; k++) s += w[k] * z[k];
+      const e = (sigm(s) - Y[n]) * peso; for (let k = 0; k < d; k++) gw[k] += e * z[k]; gb += e; tot += peso;
+    }
+    for (let k = 0; k < d; k++) w[k] -= lr * (gw[k] / tot + l2 * w[k]); b -= lr * gb / tot;
+  }
+  return {w, b, mu, sd};
+}
+const capBruto = (m, f) => { let s = m.b; for (let k = 0; k < f.length; k++) s += m.w[k] * (f[k] - m.mu[k]) / m.sd[k]; return s; };
+// calibração: o modelo treina com eventos "pesados"; aqui convertemos a nota em chance real pela frequência observada no treino
+function calibrar(notas, Y) {
+  const ord = notas.map((s, k) => [s, Y[k]]).sort((a, b) => a[0] - b[0]), faixas = [];
+  const tam = Math.max(50, Math.floor(ord.length / 10));
+  for (let k = 0; k < ord.length; k += tam) { const g = ord.slice(k, k + tam); faixas.push([g[0][0], g[g.length - 1][0], g.reduce((a, b) => a + b[1], 0) / g.length]); }
+  for (let k = 1; k < faixas.length; k++) faixas[k][2] = Math.max(faixas[k][2], faixas[k - 1][2]);   // chance só sobe com a nota
+  return faixas;
+}
+const chanceCal = (cal, s) => { for (const [a, b, p] of cal) if (s <= b) return p; return cal[cal.length - 1][2]; };
+function modeloCapitulacao(lista) {
+  // lista: [{simbolo, x}]; treino = primeiros 70% de cada moeda, teste = 30% finais (nunca vistos)
+  const tr = [], te = [];
+  for (const {simbolo, x} of lista) {
+    const {dias} = capAmostras(x), ok = dias.filter(d => d.conhecido); if (ok.length < 200) continue;
+    const corte = Math.floor(ok.length * 0.7);
+    ok.forEach((d, k) => (k < corte ? tr : te).push({...d, simbolo}));
+  }
+  const eventosTr = tr.filter(d => d.y).length;
+  if (tr.length < 500 || eventosTr < 40) return {ok: false, motivo: "histórico curto demais para treinar"};
+  const m = treinarLogistica(tr.map(d => d.f), tr.map(d => d.y));
+  const nt = tr.map(d => capBruto(m, d.f)), cal = calibrar(nt, tr.map(d => d.y));
+  const base = tr.reduce((a, d) => a + d.y, 0) / tr.length;
+  // limiar de alerta: o que dá a melhor combinação de acerto e cobertura no treino
+  let lim = null, melhorF = -1;
+  for (const q of [0.85, 0.88, 0.9, 0.93, 0.95]) {   // alerta em no máximo ~15% dos dias
+    const t = [...nt].sort((a, b) => a - b)[Math.floor(nt.length * q)];
+    const al = tr.filter((d, k) => nt[k] >= t), tp = al.filter(d => d.y).length;
+    const prec = al.length ? tp / al.length : 0, rec = eventosTr ? tp / eventosTr : 0, f = prec + rec ? 2 * prec * rec / (prec + rec) : 0;
+    if (f > melhorF) { melhorF = f; lim = t; }
+  }
+  const avaliar_ = conj => { if (!conj.length) return null;
+    const al = conj.filter(d => capBruto(m, d.f) >= lim), tp = al.filter(d => d.y).length;
+    return {dias: conj.length, base: conj.filter(d => d.y).length / conj.length * 100, alertas: al.length, acerto_alerta: al.length ? tp / al.length * 100 : null}; };
+  return {ok: true, modelo: m, cal, limiar: lim, base: base * 100, treino: avaliar_(tr), teste: avaliar_(te),
+    pesos: CAP_FATORES.map(([id, txt], k) => ({id, txt, peso: m.w[k]}))};
+}
+// quantas capitulações de cada moeda foram avisadas antes, e com quantos dias de antecedência
+function capHistorico(x, mod) {
+  const {inicios} = capAmostras(x), n = x.fech.length, ev = [];
+  for (const j of inicios) {
+    let primeiro = null;
+    for (let i = Math.max(0, j - CAP_H); i < j; i++) { const f = capFeat(x, i); if (f && !capEmCap(x, i) && capBruto(mod.modelo, f) >= mod.limiar) { primeiro = i; break; } }
+    let fim = j; while (fim + 1 < n && capEmCap(x, fim + 1) && fim - j < 60) fim++;
+    let fundo = Infinity, diaFundo = j; for (let k = j; k <= Math.min(n - 1, fim + 10); k++) if (x.d1[k].l < fundo) { fundo = x.d1[k].l; diaFundo = k; }
+    ev.push({t: x.d1[j].t, preco: x.fech[j], fundo, t_fundo: x.d1[diaFundo].t, avisou: primeiro != null, antecedencia: primeiro != null ? j - primeiro : null,
+      rel_custo: x.custo[j] ? fundo / x.custo[j] - 1 : null, rel_atr: x.custo[j] && x.atrp[j] ? (fundo / x.custo[j] - 1) / x.atrp[j] : null,
+      depois30: diaFundo + 30 < n ? (x.fech[diaFundo + 30] / fundo - 1) * 100 : null});
+  }
+  return ev;
+}
+function capAtual(x, mod, ev, refPool) {
+  const n = x.fech.length, i = n - 1, emCap = capEmCap(x, i);
+  const ultimo = ev.length ? ev[ev.length - 1] : null, diasDesde = ultimo ? (x.d1[i].t - ultimo.t) / 86400 : null;
+  const f = capFeat(x, i);
+  let chance = null, contrib = [], alerta = false;
+  if (mod && mod.ok && f) {
+    const s = capBruto(mod.modelo, f); chance = chanceCal(mod.cal, s) * 100; alerta = s >= mod.limiar;
+    contrib = CAP_FATORES.map(([id, txt], k) => ({id, txt, valor: mod.modelo.w[k] * (f[k] - mod.modelo.mu[k]) / mod.modelo.sd[k]}))
+      .filter(c => c.valor > 0.15).sort((a, b) => b.valor - a.valor).slice(0, 3);
+  }
+  let fase;
+  if (emCap) fase = "acontecendo";
+  else if (ultimo && diasDesde <= 25) fase = "recuperando";
+  else if (chance == null) fase = "sem_dados";
+  else if (alerta && chance >= Math.max(30, mod.base * 2.5)) fase = "alto";
+  else if (alerta || chance >= mod.base * 1.6) fase = "aumentando";
+  else fase = "baixo";
+  // zona provável do fundo, pela distância típica entre o fundo e o custo médio nas capitulações passadas
+  const custo = x.custo[i], atr = x.atrp[i]; let zona = null;
+  const rc = ev.map(e => e.rel_custo).filter(v => v != null);
+  if (custo && rc.length >= 4) zona = {de: custo * (1 + percentil(rc, 25)), ate: custo * (1 + percentil(rc, 75)), base: "nesta moeda", casos: rc.length};
+  else if (custo && atr && refPool && refPool.length >= 8) zona = {de: custo * (1 + percentil(refPool, 25) * atr), ate: custo * (1 + percentil(refPool, 75) * atr), base: "em todas as moedas", casos: refPool.length};
+  if (zona && zona.de > zona.ate) [zona.de, zona.ate] = [zona.ate, zona.de];
+  const avisados = ev.filter(e => e.avisou), ant = avisados.map(e => e.antecedencia).sort((a, b) => a - b);
+  return {fase, chance, alerta, base: mod?.ok ? mod.base : null, fatores: contrib, zona, custo, preco: x.fech[i],
+    sopr7: x.s7[i], limite: x.p5[i], dias_desde_ultima: diasDesde,
+    historico: {capitulacoes: ev.length, avisadas: avisados.length, antecedencia_mediana: ant.length ? ant[Math.floor(ant.length / 2)] : null,
+      ultimas: ev.slice(-4).reverse().map(e => ({t: e.t, fundo: e.fundo, t_fundo: e.t_fundo, avisou: e.avisou, antecedencia: e.antecedencia, depois30: e.depois30}))},
+    modelo: mod?.ok ? {teste: mod.teste, treino: mod.treino, base: mod.base} : null};
+}
+function capitulacaoTodas(lista) {   // lista: [{simbolo, x}] -> {simbolo: resultado}
+  const mod = modeloCapitulacao(lista), out = {}, evs = {};
+  if (!mod.ok) { for (const {simbolo, x} of lista) out[simbolo] = {fase: capEmCap(x, x.fech.length - 1) ? "acontecendo" : "sem_dados", motivo: mod.motivo}; return out; }
+  for (const {simbolo, x} of lista) evs[simbolo] = capHistorico(x, mod);
+  const pool = Object.values(evs).flat().map(e => e.rel_atr).filter(v => v != null);
+  for (const {simbolo, x} of lista) out[simbolo] = capAtual(x, mod, evs[simbolo], pool);
+  return out;
+}
+// sinais de agora (sem histórico): só ajustam a leitura, mostrados à parte
+function capAoVivo(cap, m, medo) {
+  if (!cap) return null;
+  const extras = [];
+  const ml = m.mapa_liq; if (ml && ml.razao_acima != null && ml.razao_acima < 0.4 && ml.ima_abaixo) extras.push({txt: `Muitas apostas na alta seriam liquidadas abaixo, perto de ${fmtPreco(ml.ima_abaixo)}: combustível para uma queda rápida`, peso: 1});
+  if (m.funding_pct != null && m.funding_pct > 0.02 && (m.variacao_24h || 0) < -2) extras.push({txt: "Preço caindo com funding alto: alavancados ainda comprados", peso: 1});
+  if (m.oi_var_1h_pct != null && m.oi_var_1h_pct > 1 && (m.variacao_24h || 0) < -2) extras.push({txt: "Novas apostas alavancadas entrando durante a queda", peso: 1});
+  const hl = m.hl?.baleias?.proporcao_long; if (hl != null && hl <= 0.35) extras.push({txt: `Baleias da Hyperliquid apostando na queda (${Math.round((1 - hl) * 100)}%)`, peso: 1});
+  if (m.stable?.tom === "baixa") extras.push({txt: "Dinheiro saindo do mercado cripto (stablecoins caindo)", peso: 0.5});
+  if (medo != null && medo <= 20) extras.push({txt: `Medo extremo no mercado (${medo}/100): capitulações costumam vir junto`, peso: 0.5});
+  return {...cap, extras};
+}
+
 function rodarLab(d1, d1Btc, xBtc, funding, ehBtc) {
   const x = preparar(d1, funding), ini = inicioValido(x);
   const sinais = SINAIS.map(s => avaliarSinal(x, s, ini, null));
@@ -1035,7 +1205,7 @@ class Estabilizador {
 
 const API = {pyRound, br, fmtUsd, fmtPreco, media, Janela, EstadoMoeda, leituraTexto, rsi, converter, agrupar, soprSerie,
   mediaPonderadaMovel, custoCurtoPrazo, percentil, classificar, analisarTimeframe, diasExtremos, perfilVolume, regimeProvavel,
-  forcaVsBtc, localPreco, analisarMoeda, preparar, testarDecisao, simular, mHist, calibrarPesos, analisarOpcoes, mapaLiquidacoes, analisarStablecoins, spearman, Absorcao, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
+  forcaVsBtc, localPreco, analisarMoeda, preparar, testarDecisao, simular, mHist, capitulacaoTodas, capAoVivo, modeloCapitulacao, capFeat, calibrarPesos, analisarOpcoes, mapaLiquidacoes, analisarStablecoins, spearman, Absorcao, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
 if (typeof module !== "undefined" && module.exports) module.exports = API;
 else raiz.Calc = API;
 })(typeof window !== "undefined" ? window : globalThis);
