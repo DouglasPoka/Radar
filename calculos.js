@@ -880,7 +880,7 @@ function capHistorico(x, mod) {
 function capAtual(x, mod, ev, refPool) {
   const n = x.fech.length, i = n - 1, emCap = capEmCap(x, i);
   const ultimo = ev.length ? ev[ev.length - 1] : null, diasDesde = ultimo ? (x.d1[i].t - ultimo.t) / 86400 : null;
-  const f = capFeat(x, i);
+  let f = null; for (let k = i; k >= Math.max(0, i - 3) && !f; k--) f = capFeat(x, k);   // vela de hoje pode estar incompleta
   let chance = null, contrib = [], alerta = false;
   if (mod && mod.ok && f) {
     const s = capBruto(mod.modelo, f); chance = chanceCal(mod.cal, s) * 100; alerta = s >= mod.limiar;
@@ -910,9 +910,9 @@ function capAtual(x, mod, ev, refPool) {
 function capitulacaoTodas(lista) {   // lista: [{simbolo, x}] -> {simbolo: resultado}
   const mod = modeloCapitulacao(lista), out = {}, evs = {};
   if (!mod.ok) { for (const {simbolo, x} of lista) out[simbolo] = {fase: capEmCap(x, x.fech.length - 1) ? "acontecendo" : "sem_dados", motivo: mod.motivo}; return out; }
-  for (const {simbolo, x} of lista) evs[simbolo] = capHistorico(x, mod);
+  for (const {simbolo, x} of lista) { try { evs[simbolo] = capHistorico(x, mod); } catch (e) { evs[simbolo] = []; } }
   const pool = Object.values(evs).flat().map(e => e.rel_atr).filter(v => v != null);
-  for (const {simbolo, x} of lista) out[simbolo] = capAtual(x, mod, evs[simbolo], pool);
+  for (const {simbolo, x} of lista) { try { out[simbolo] = capAtual(x, mod, evs[simbolo], pool); } catch (e) { out[simbolo] = {fase: "sem_dados", motivo: "erro no cálculo: " + (e.message || e)}; } }
   return out;
 }
 // sinais de agora (sem histórico): só ajustam a leitura, mostrados à parte
@@ -1206,6 +1206,7 @@ class Estabilizador {
 const API = {pyRound, br, fmtUsd, fmtPreco, media, Janela, EstadoMoeda, leituraTexto, rsi, converter, agrupar, soprSerie,
   mediaPonderadaMovel, custoCurtoPrazo, percentil, classificar, analisarTimeframe, diasExtremos, perfilVolume, regimeProvavel,
   forcaVsBtc, localPreco, analisarMoeda, preparar, testarDecisao, simular, mHist, capitulacaoTodas, capAoVivo, modeloCapitulacao, capFeat, calibrarPesos, analisarOpcoes, mapaLiquidacoes, analisarStablecoins, spearman, Absorcao, SINAIS, avaliarSinal, rodarLab, ESTADOS, avaliar, Estabilizador};
+API.versao = 8;
 if (typeof module !== "undefined" && module.exports) module.exports = API;
 else raiz.Calc = API;
 })(typeof window !== "undefined" ? window : globalThis);

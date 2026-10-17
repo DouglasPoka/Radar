@@ -12,8 +12,8 @@
 <meta name="apple-mobile-web-app-title" content="Radar">
 <link rel="apple-touch-icon" href="./icone-180.png">
 <link rel="icon" href="./icone-192.png">
-<script src="./calculos.js"></script>
-<script src="./motor.js"></script>
+<script src="./calculos.js?v=8"></script>
+<script src="./motor.js?v=8"></script>
 <style>
 :root{
   --bg:#0a0d13; --card:#121722; --card2:#191f2c; --linha:rgba(255,255,255,.06); --texto:#eef1f6; --fraco:#8b95a7;
@@ -105,6 +105,7 @@ label.rot{font-size:13px;color:var(--fraco);display:block;margin:10px 0 4px}
       <button class="ajuda-btn" onclick="irPara('inicio');document.getElementById('ajuda').classList.toggle('oculto')" aria-label="Como ler">?</button></div>
   </header>
 
+  <div class="card oculto" id="aviso-versao" style="border:1px solid var(--laranja)"></div>
   <!-- INÍCIO -->
   <section id="tela-inicio">
     <div class="card ajuda oculto" id="ajuda">
@@ -173,6 +174,13 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 const CORES = {BTC:"#f7931a",ETH:"#8a92b2",PENDLE:"#5ad1c6",NEAR:"#ff6b9d",RENDER:"#ef4444"};
 const NOMES = {BTC:"Bitcoin",ETH:"Ethereum",PENDLE:"Pendle",NEAR:"Near",RENDER:"Render"};
 let E = null, tela = "inicio", abertos = new Set();
+const VERSAO = 8;
+function checarVersao() {   // index novo com motor/cálculos antigos (cache ou arquivo que faltou subir)
+  const faltam = [window.Calc?.versao !== VERSAO && "calculos.js", window.Radar?.versao !== VERSAO && "motor.js"].filter(Boolean);
+  const el = document.getElementById("aviso-versao"); if (!el) return;
+  el.classList.toggle("oculto", !faltam.length);
+  if (faltam.length) el.innerHTML = `<b>⚠️ Atualização incompleta</b><p class="fr" style="font-size:14px;margin:6px 0 0">O celular abriu uma versão antiga de <b style="color:var(--texto)">${faltam.join(" e ")}</b>. Confira se esse arquivo foi enviado no GitHub junto com os outros. Depois, feche o app por completo e abra de novo (ou puxe a página para baixo para recarregar).</p>`;
+}
 
 // ===================================================================== linguagem simples
 const SIMPLES = {
@@ -438,6 +446,20 @@ const FASES = {
 const dataBR = t => new Date(t * 1000).toLocaleDateString("pt-BR", {day: "2-digit", month: "short", year: "numeric"});
 const capAbertos = new Set();
 function telaCap() {
+  if (!E.moedas.some(m => m.capitulacao && (m.capitulacao.chance != null || m.capitulacao.fase !== "sem_dados"))) {
+    const st = String(E.status?.lab || ""), pr = E.lab_progresso;
+    const motivo = E.moedas.map(m => m.capitulacao?.motivo).find(Boolean);
+    let txt;
+    if (E.versao == null || window.Radar?.versao !== VERSAO) txt = "O app está com um arquivo antigo (motor.js ou calculos.js). Veja o aviso no topo.";
+    else if (st.startsWith("erro")) txt = "O Laboratório deu erro: " + esc(st.slice(5)) + ". Me mande um print desta tela.";
+    else if (motivo) txt = esc(maiuscula(motivo)) + ".";
+    else if (st === "calculando") txt = `Calculando com o histórico de todas as moedas: <b style="color:var(--texto)">${esc(pr || "")}</b>. Na primeira vez leva de 1 a 3 minutos; mantenha o app aberto.`;
+    else if (!E.sopr_atualizado) txt = "Esperando os dados de preço carregarem. Começa sozinho em alguns segundos.";
+    else txt = "Aguardando o Laboratório começar…";
+    document.getElementById("cap-modelo").innerHTML = "";
+    document.getElementById("cap-moedas").innerHTML = `<div class="card"><div class="carregando" style="padding:24px 6px"><div class="giro"></div>${txt}</div></div>`;
+    return;
+  }
   const comMod = E.moedas.map(m => m.capitulacao?.modelo).find(Boolean);
   document.getElementById("cap-modelo").innerHTML = comMod && comMod.teste ? `<div class="nota" style="margin-top:10px">No teste com o período mais recente (que o modelo nunca viu), quando o alerta ligou a capitulação veio nas 3 semanas seguintes em <b style="color:var(--texto)">${nf(comMod.teste.acerto_alerta ?? 0, 0)}%</b> das vezes, contra <b style="color:var(--texto)">${nf(comMod.teste.base, 0)}%</b> num dia qualquer. Use como aviso para se preparar, não como certeza.</div>` : "";
   document.getElementById("cap-moedas").innerHTML = E.moedas.map(m => {
@@ -675,6 +697,7 @@ function render(forcar) {
   if (tela === "alertas") document.getElementById("lista-alertas").innerHTML = avisosHTML();
 }
 async function atualizar() {
+  checarVersao();
   try { E = await (await fetch("/api/estado")).json(); render(); } catch (e) {}
 }
 setInterval(atualizar, 3000); atualizar();
